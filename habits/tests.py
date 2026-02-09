@@ -167,7 +167,7 @@ class APITests(APITestCase):
         response = self.client.post(url, data, format="json")
         assert response.status_code == status.HTTP_201_CREATED, response.content
         expense = response.json()
-        assert expense["amount"] == "200.00"
+        assert expense["amount"] == 200.00
         assert expense["description"] == "API Created Expense"
         assert expense["split_type"] == "equal"
         assert len(expense["splits"]) == 2
@@ -190,7 +190,7 @@ class APITests(APITestCase):
         response = self.client.post(url, data, format="json")
         assert response.status_code == status.HTTP_201_CREATED, f"Error: {response.content}"
         expense = response.json()
-        assert expense["amount"] == "200.00"
+        assert expense["amount"] == 200.00
         assert expense["description"] == "API Created Expense 2"
         assert expense["split_type"] == "equal"
         assert len(expense["splits"]) == 2
@@ -218,7 +218,7 @@ class APITests(APITestCase):
         expense_equal = response.json()
         assert expense_equal["split_type"] == "equal"
         assert len(expense_equal["splits"]) == 3
-        assert all(s["share_amount"] == "30.00" for s in expense_equal["splits"]) == True
+        assert all(s["share_amount"] == 30.00 for s in expense_equal["splits"]) == True
 
         # 2. Amount split among three users
         data_amount = {
@@ -284,3 +284,157 @@ class APITests(APITestCase):
             sorted([Decimal(s["share_amount"]) for s in expense_custom["splits"]]),
             [Decimal("20.00"), Decimal("30.00")],
         )
+
+    def test_nested_board_expenses_list(self):
+        """Test retrieving expenses for a specific board via nested route."""
+        board = Board.objects.filter(created_by=self.user).first()
+        assert board is not None, "Default board was not found for the user"
+        user2 = self.create_random_user()
+        BoardUser.objects.create(user=user2, board=board)
+
+        # Create a second board with different expenses
+        board2 = Board.objects.create(
+            name="Second Board", description="Another board", created_by=self.user
+        )
+        BoardUser.objects.create(user=self.user, board=board2)
+
+        # Create expenses in the first board
+        url_nested = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
+        expense1_data = {
+            "payer": str(self.user.id),
+            "board": str(board.id),
+            "amount": 100.00,
+            "description": "Board 1 Expense 1",
+            "split_type": "equal",
+        }
+        response = self.client.post(url_nested, expense1_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        expense2_data = {
+            "payer": str(user2.id),
+            "board": str(board.id),
+            "amount": 50.00,
+            "description": "Board 1 Expense 2",
+            "split_type": "equal",
+        }
+        response = self.client.post(url_nested, expense2_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Create an expense in the second board
+        url_nested2 = reverse("board-expenses-list", kwargs={"board_pk": str(board2.id)})
+        expense3_data = {
+            "payer": str(self.user.id),
+            "board": str(board2.id),
+            "amount": 75.00,
+            "description": "Board 2 Expense 1",
+            "split_type": "equal",
+        }
+        response = self.client.post(url_nested2, expense3_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Test retrieving expenses for board 1
+        response = self.client.get(url_nested)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expenses = response.json()
+        self.assertEqual(len(expenses), 2)
+        descriptions = [e["description"] for e in expenses]
+        self.assertIn("Board 1 Expense 1", descriptions)
+        self.assertIn("Board 1 Expense 2", descriptions)
+        self.assertNotIn("Board 2 Expense 1", descriptions)
+
+        # Test retrieving expenses for board 2
+        response = self.client.get(url_nested2)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expenses = response.json()
+        self.assertEqual(len(expenses), 1)
+        self.assertEqual(expenses[0]["description"], "Board 2 Expense 1")
+
+    def test_nested_board_expenses_detail(self):
+        """Test retrieving a specific expense via nested route."""
+        board = Board.objects.filter(created_by=self.user).first()
+        assert board is not None, "Default board was not found for the user"
+
+        # Create an expense
+        expense = Expense.objects.create(
+            payer=self.user,
+            board=board,
+            amount=Decimal("200.00"),
+            description="Detail Test Expense",
+            split_type="equal",
+        )
+        ExpenseSplit.objects.create(expense=expense, user=self.user, share_amount=Decimal("200.00"))
+
+        # Test retrieving via nested route
+        url = reverse(
+            "board-expenses-detail", kwargs={"board_pk": str(board.id), "id": str(expense.id)}
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expense_data = response.json()
+        self.assertEqual(expense_data["description"], "Detail Test Expense")
+        self.assertEqual(expense_data["amount"], 200.00)
+        self.assertEqual(expense_data["board"], str(board.id))
+
+    def test_nested_board_expenses_update(self):
+        """Test updating an expense via nested route."""
+        board = Board.objects.filter(created_by=self.user).first()
+        assert board is not None, "Default board was not found for the user"
+        user2 = self.create_random_user()
+        BoardUser.objects.create(user=user2, board=board)
+
+        # Create an expense
+        expense = Expense.objects.create(
+            payer=self.user,
+            board=board,
+            amount=Decimal("150.00"),
+            description="Update Test Expense",
+            split_type="amount",
+        )
+        ExpenseSplit.objects.create(expense=expense, user=self.user, share_amount=Decimal("100.00"))
+        ExpenseSplit.objects.create(expense=expense, user=user2, share_amount=Decimal("50.00"))
+
+        # Update splits via nested route
+        url = reverse(
+            "board-expenses-detail", kwargs={"board_pk": str(board.id), "id": str(expense.id)}
+        )
+        update_data = {
+            "splits": [
+                {"user": str(self.user.id), "share_amount": 75.00},
+                {"user": str(user2.id), "share_amount": 75.00},
+            ]
+        }
+        response = self.client.patch(url, update_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"Error: {response.content}")
+        updated_expense = response.json()
+        self.assertEqual(
+            sorted([Decimal(s["share_amount"]) for s in updated_expense["splits"]]),
+            [Decimal("75.00"), Decimal("75.00")],
+        )
+
+    def test_nested_board_expenses_permission(self):
+        """Test that users can't access expenses from boards they're not members of."""
+        # Create another user with their own board
+        other_user = self.create_random_user()
+        other_board = Board.objects.create(
+            name="Other User Board", description="Not accessible", created_by=other_user
+        )
+        BoardUser.objects.create(user=other_user, board=other_board)
+
+        # Create an expense in the other user's board
+        other_expense = Expense.objects.create(
+            payer=other_user,
+            board=other_board,
+            amount=Decimal("100.00"),
+            description="Private Expense",
+            split_type="equal",
+        )
+        ExpenseSplit.objects.create(
+            expense=other_expense, user=other_user, share_amount=Decimal("100.00")
+        )
+
+        # Try to access via nested route - should return empty list
+        url = reverse("board-expenses-list", kwargs={"board_pk": str(other_board.id)})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expenses = response.json()
+        self.assertEqual(len(expenses), 0)  # User shouldn't see expenses from boards they're not in

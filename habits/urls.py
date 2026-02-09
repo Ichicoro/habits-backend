@@ -19,6 +19,7 @@ from django.contrib.auth.models import User
 from django.urls import include, path
 from django.contrib import admin
 from django.urls import path
+from rest_framework.authtoken import views
 
 from habits.views import router
 
@@ -37,6 +38,7 @@ urlpatterns = [
         name="swagger-ui",
     ),
     path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    path("api/auth/login/", views.obtain_auth_token),
 ]
 
 print("Routes:", [u.name for u in router.urls])

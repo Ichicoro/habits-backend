@@ -1,7 +1,13 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.utils.timezone import now
 import uuid
+
+
+def get_today():
+    return now().date()
+
 
 from habits import managers
 
@@ -101,7 +107,7 @@ class Habit(models.Model):
 class ExpenseCategory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
+    emoji = models.CharField(max_length=10, default="💰")
     board = models.ForeignKey(
         Board, on_delete=models.CASCADE, related_name="expense_categories", null=True, blank=True
     )
@@ -109,7 +115,7 @@ class ExpenseCategory(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.emoji} {self.name}"
 
 
 class ExpenseSplitType(models.TextChoices):
@@ -151,6 +157,7 @@ class Expense(models.Model):
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField(blank=True, null=True)
+    date = models.DateField(default=get_today)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     category = models.ForeignKey(

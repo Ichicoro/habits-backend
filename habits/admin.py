@@ -14,6 +14,12 @@ class ExpenseSplitInline(admin.TabularInline):
     fk_name = "expense"
 
 
+class ExpenseCategoryInline(admin.TabularInline):
+    model = models.ExpenseCategory
+    extra = 1
+    fk_name = "board"
+
+
 class BoardUserBoardInline(admin.TabularInline):
     model = models.BoardUser
     extra = 1
@@ -33,7 +39,7 @@ class BoardModelAdmin(admin.ModelAdmin):
     list_filter = ("created_by", "created_at", "updated_at")
     search_fields = ("name", "description")
     ordering = ("-created_at",)
-    inlines = [BoardUserBoardInline]
+    inlines = [BoardUserBoardInline, ExpenseCategoryInline]
 
 
 class BoardUserModelAdmin(admin.ModelAdmin):
@@ -60,11 +66,18 @@ class HabitModelAdmin(admin.ModelAdmin):
 
 
 class ExpenseModelAdmin(admin.ModelAdmin):
-    list_display = ("id", "payer", "amount", "description", "created_at")
+    list_display = ("id", "payer", "amount", "description", "created_at", "category")
     list_filter = ("payer", "created_at")
     search_fields = ("description",)
     ordering = ("-created_at",)
     inlines = [ExpenseSplitInline]
+
+
+class ExpenseCategoryModelAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "emoji", "board")
+    list_filter = ("board",)
+    search_fields = ("name",)
+    ordering = ("name",)
 
 
 admin.site.register(models.User, UserModelAdmin)
@@ -72,3 +85,4 @@ admin.site.register(models.Board, BoardModelAdmin)
 admin.site.register(models.BoardUser, BoardUserModelAdmin)
 admin.site.register(models.Habit, HabitModelAdmin)
 admin.site.register(models.Expense, ExpenseModelAdmin)
+admin.site.register(models.ExpenseCategory, ExpenseCategoryModelAdmin)

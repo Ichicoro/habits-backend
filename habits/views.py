@@ -13,7 +13,12 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=False, methods=["get"], url_path="me", url_name="get-me")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="me",
+        url_name="get-me",
+    )
     def get_me(self, request, *args, **kwargs):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)

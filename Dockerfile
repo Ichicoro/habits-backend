@@ -33,7 +33,7 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
  
 # Set the working directory
 WORKDIR /app
- 
+
 # Copy application code
 COPY --chown=appuser:appuser . .
  
@@ -46,6 +46,9 @@ USER appuser
  
 # Expose the application port
 EXPOSE 3000
+
+CMD ["python", "manage.py", "migrate", "--noinput"]
+CMD ["python", "manage.py", "collectstatic", "--noinput", "--clear"]
 
 # Start the application using Gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:3000", "--workers", "3", "habits.wsgi:application"]

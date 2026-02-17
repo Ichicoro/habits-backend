@@ -35,3 +35,4 @@ sqlparse==0.5.3
 tomlkit==0.13.2
 uritemplate==4.2.0
 uuid==1.30
+whitenoise==6.11.0

@@ -50,7 +50,5 @@ USER appuser
 # Expose the application port
 EXPOSE 3000
 
-CMD ["sh", "upkeep.sh"]
-
 # Start the application using Gunicorn
-ENTRYPOINT ["sh", "start.sh"]
+CMD ["sh", "-c", "sh upkeep.sh && sh start.sh"]

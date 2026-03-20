@@ -89,7 +89,7 @@ class HabitFrequency(models.TextChoices):
 
 class Habit(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    board = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, related_name="habits")
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="habits")
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     frequency = models.CharField(

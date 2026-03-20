@@ -22,6 +22,7 @@ pathspec==0.12.1
 platformdirs==4.3.7
 pluggy==1.5.0
 psycopg2-binary==2.9.11
+python-dotenv==1.2.2
 pycodestyle==2.13.0
 pyflakes==3.3.2
 pylint==3.3.6

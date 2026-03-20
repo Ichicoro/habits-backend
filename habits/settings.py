@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 import os
 from pathlib import Path
-from re import A
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -88,8 +87,6 @@ STORAGES = {
 }
 
 WSGI_APPLICATION = "habits.wsgi.application"
-
-ALLOWED_HOSTS = ["*"]
 
 
 # Database

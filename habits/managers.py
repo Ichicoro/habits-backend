@@ -24,7 +24,7 @@ class BalanceManager(Manager):
         )
 
         users = (
-            models.User.objects.filter(groups=group)
+            models.User.objects.filter(habit_boards__board=group)
             .annotate(
                 paid=Subquery(paid_qs, output_field=FloatField()),
                 owed=Subquery(owed_qs, output_field=FloatField()),

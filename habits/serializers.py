@@ -1,4 +1,4 @@
-import datetime
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -160,7 +160,7 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Splits data is required for percentage split type")
 
         total_percentage = sum(sd["percentage"] for sd in splits_data)
-        if total_percentage != 100:
+        if abs(total_percentage - Decimal("100")) > Decimal("0.01"):
             raise serializers.ValidationError("Total split percentage must equal 100%")
 
         users = [sd["user"] for sd in splits_data]
@@ -212,15 +212,6 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
             self.handle_percentage_splits(expense, splits_data)
         elif expense.split_type == models.ExpenseSplitType.EQUAL:
             self.handle_equal_splits(expense, splits_data)
-
-    def update_category(self, board, category_id):
-        category = models.ExpenseCategory(id=category_id) if category_id else None
-        if category:
-            if category.board and category.board != board:
-                raise serializers.ValidationError(
-                    "Category does not belong to the specified board."
-                )
-        return category  # type: ignore
 
     def create(self, validated_data):
         splits_data = validated_data.pop("splits", None)

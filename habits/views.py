@@ -1,5 +1,4 @@
-from decimal import Decimal
-from habits import models, serializers, signals
+from habits import models, serializers
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,9 +8,11 @@ from habits.permissions import IsInBoardPermission
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = models.User.objects.all()
     serializer_class = serializers.UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return models.User.objects.filter(pk=self.request.user.pk)
 
     @action(
         detail=False,
@@ -30,7 +31,7 @@ class HabitViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return self.queryset.filter(users__user=self.request.user)  # type: ignore
+        return self.queryset.filter(board__users__user=self.request.user)
 
 
 class BoardsViewSet(viewsets.ModelViewSet):
@@ -39,7 +40,10 @@ class BoardsViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return self.queryset.filter(users__user=self.request.user)  # type: ignore
+        return self.queryset.filter(users__user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -72,7 +76,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
 
 router = DefaultRouter()
-router.register(r"users", UserViewSet)
+router.register(r"users", UserViewSet, basename="user")
 router.register(r"habits", HabitViewSet)
 router.register(r"boards", BoardsViewSet, basename="board")
 router.register(r"expenses", ExpenseViewSet)

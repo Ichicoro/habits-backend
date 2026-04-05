@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Q
 from habits import models
 from rest_framework import serializers
@@ -40,6 +41,7 @@ class BoardSerializer(serializers.ModelSerializer):
             "updated_at",
             "expense_categories",
         )
+        read_only_fields = ("created_by", "created_at", "updated_at")
 
     def get_expense_categories(self, obj):
         qs = models.ExpenseCategory.objects.filter(Q(board=obj) | Q(board__isnull=True)).order_by(
@@ -114,7 +116,11 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
     payer = UserSerializer(read_only=True)
     category = ExpenseCategorySerializer(read_only=True)
     category_id = serializers.PrimaryKeyRelatedField(
-        queryset=models.ExpenseCategory.objects.all(), write_only=True, source="category"
+        queryset=models.ExpenseCategory.objects.all(),
+        write_only=True,
+        source="category",
+        required=False,
+        allow_null=True,
     )
     board = serializers.PrimaryKeyRelatedField(read_only=True)
 
@@ -185,7 +191,7 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Splits data is required for amount split type")
 
         total = sum(sd["share_amount"] for sd in splits_data)
-        if total != expense.amount:
+        if abs(total - expense.amount) > Decimal("0.01"):
             raise serializers.ValidationError("Total split amount must equal the expense amount")
 
         users = [sd["user"] for sd in splits_data]
@@ -215,11 +221,14 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         splits_data = validated_data.pop("splits", None)
-        board = models.Board.objects.get(id=self.context.get("board_id"))  # type: ignore
-        validated_data["board"] = board  # type: ignore
-        expense = models.Expense.objects.create(**validated_data)
-        self.create_from_splits_data(expense, splits_data)
-        expense.save()
+        board_id = self.context.get("board_id")
+        if not board_id:
+            raise serializers.ValidationError({"board": "Expenses must be created via /boards/<id>/expenses/."})
+        board = models.Board.objects.get(id=board_id)
+        validated_data["board"] = board
+        with transaction.atomic():
+            expense = models.Expense.objects.create(**validated_data)
+            self.create_from_splits_data(expense, splits_data)
         return expense
 
     def update(self, instance: models.Expense, validated_data):

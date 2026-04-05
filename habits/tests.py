@@ -156,10 +156,9 @@ class APITests(APITestCase):
         assert board is not None, "Default board was not found for the user"
         user2 = self.create_random_user()
         BoardUser.objects.create(user=user2, board=board)
-        url = reverse("expense-list")
+        url = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
         data = {
-            "payer": str(self.user.id),
-            "board": str(board.id),
+            "payer_id": str(self.user.id),
             "amount": "200.00",
             "description": "API Created Expense",
             "split_type": "equal",
@@ -175,10 +174,8 @@ class APITests(APITestCase):
         # Test creating an expense only for two out of three users
         user3 = self.create_random_user()
         BoardUser.objects.create(user=user3, board=board)
-        url = reverse("expense-list")
         data = {
-            "payer": str(self.user.id),
-            "board": str(board.id),
+            "payer_id": str(self.user.id),
             "amount": "200.00",
             "description": "API Created Expense 2",
             "split_type": "equal",
@@ -205,10 +202,9 @@ class APITests(APITestCase):
         BoardUser.objects.create(user=user3, board=board)
 
         # 1. Equal split among three users
-        url = reverse("expense-list")
+        url = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
         data_equal = {
-            "payer": str(self.user.id),
-            "board": str(board.id),
+            "payer_id": str(self.user.id),
             "amount": "90.00",
             "description": "Equal Split Expense",
             "split_type": "equal",
@@ -222,8 +218,7 @@ class APITests(APITestCase):
 
         # 2. Amount split among three users
         data_amount = {
-            "payer": str(user2.id),
-            "board": str(board.id),
+            "payer_id": str(user2.id),
             "amount": "120.00",
             "description": "Amount Split Expense",
             "split_type": "amount",
@@ -254,7 +249,6 @@ class APITests(APITestCase):
                 {"user": str(user3.id), "share_amount": "30.00"},
             ]
         }
-        print("expenses:", [exp.id for exp in Expense.objects.all()])  # TODO: FIX EXPENSE QUERYSET
         response = self.client.patch(url_detail, update_data, format="json")
         assert response.status_code == status.HTTP_200_OK, f"Error: {response.content}"
         updated_expense = response.json()
@@ -265,8 +259,7 @@ class APITests(APITestCase):
 
         # 4. Create an expense with only two users (custom splits)
         data_custom = {
-            "payer": str(user3.id),
-            "board": str(board.id),
+            "payer_id": str(user3.id),
             "amount": "50.00",
             "description": "Custom Split Expense",
             "split_type": "amount",
@@ -301,7 +294,7 @@ class APITests(APITestCase):
         # Create expenses in the first board
         url_nested = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
         expense1_data = {
-            "payer": str(self.user.id),
+            "payer_id": str(self.user.id),
             "board": str(board.id),
             "amount": 100.00,
             "description": "Board 1 Expense 1",
@@ -311,7 +304,7 @@ class APITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         expense2_data = {
-            "payer": str(user2.id),
+            "payer_id": str(user2.id),
             "board": str(board.id),
             "amount": 50.00,
             "description": "Board 1 Expense 2",
@@ -323,7 +316,7 @@ class APITests(APITestCase):
         # Create an expense in the second board
         url_nested2 = reverse("board-expenses-list", kwargs={"board_pk": str(board2.id)})
         expense3_data = {
-            "payer": str(self.user.id),
+            "payer_id": str(self.user.id),
             "board": str(board2.id),
             "amount": 75.00,
             "description": "Board 2 Expense 1",
@@ -432,9 +425,7 @@ class APITests(APITestCase):
             expense=other_expense, user=other_user, share_amount=Decimal("100.00")
         )
 
-        # Try to access via nested route - should return empty list
+        # Try to access via nested route - should be forbidden
         url = reverse("board-expenses-list", kwargs={"board_pk": str(other_board.id)})
         response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        expenses = response.json()
-        self.assertEqual(len(expenses), 0)  # User shouldn't see expenses from boards they're not in
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

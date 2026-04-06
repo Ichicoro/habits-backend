@@ -16,6 +16,8 @@ Including another URLconf
 """
 
 import os
+from django.conf import settings
+from django.conf.urls.static import static
 from django.urls import include, path, re_path
 from django.contrib import admin
 from django.urls import path
@@ -47,5 +49,5 @@ urlpatterns = [
     path("api/", include(router.urls)),
     # Flutter SPA - serve for all non-API, non-admin routes
     path("", lambda r: flutter_redirect(r, "index.html")),
-    re_path(r"^(?!api/)(?!admin/)(?!static/)(?P<resource>.*)$", flutter_redirect),
-]
+    re_path(r"^(?!api/)(?!admin/)(?!static/)(?!media/)(?P<resource>.*)$", flutter_redirect),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

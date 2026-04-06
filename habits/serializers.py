@@ -8,9 +8,11 @@ from rest_framework import serializers
 
 
 class UserSerializer(serializers.ModelSerializer):
+    profile_picture = serializers.ImageField(read_only=True, use_url=True)
+
     class Meta:
         model = models.User
-        fields = ("id", "username", "email", "first_name", "last_name")
+        fields = ("id", "username", "email", "first_name", "last_name", "profile_picture")
 
 
 class HabitSerializer(serializers.ModelSerializer):

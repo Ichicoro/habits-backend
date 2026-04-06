@@ -24,6 +24,24 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
 
+    @action(
+        detail=False,
+        methods=["post", "delete"],
+        url_path="me/profile-picture",
+        url_name="set-profile-picture",
+    )
+    def set_profile_picture(self, request, *args, **kwargs):
+        if request.method == "DELETE":
+            request.user.profile_picture.delete(save=True)
+            return Response(status=204)
+        image = request.FILES.get("profile_picture")
+        if not image:
+            return Response({"profile_picture": "This field is required."}, status=400)
+        request.user.profile_picture = image
+        request.user.save(update_fields=["profile_picture"])
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+
 
 class HabitViewSet(viewsets.ModelViewSet):
     queryset = models.Habit.objects.all()

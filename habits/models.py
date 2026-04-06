@@ -16,6 +16,7 @@ class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email"]
+    profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
 
     def balance_in_board(self, board):
         paid = self.paid_expenses.filter(board=board).aggregate(total=models.Sum("amount"))["total"] or 0  # type: ignore

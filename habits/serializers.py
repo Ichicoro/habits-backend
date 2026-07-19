@@ -42,8 +42,9 @@ class BoardSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "expense_categories",
+            "join_code",
         )
-        read_only_fields = ("created_by", "created_at", "updated_at")
+        read_only_fields = ("created_by", "created_at", "updated_at", "join_code")
 
     def get_expense_categories(self, obj):
         qs = models.ExpenseCategory.objects.filter(Q(board=obj) | Q(board__isnull=True)).order_by(

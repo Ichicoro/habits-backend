@@ -1,3 +1,5 @@
+import re
+
 from habits import models, serializers
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
@@ -61,7 +63,25 @@ class BoardsViewSet(viewsets.ModelViewSet):
         return self.queryset.filter(users__user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        board = serializer.save(created_by=self.request.user)
+        models.BoardUser.objects.create(board=board, user=self.request.user)
+
+    @action(detail=False, methods=["post"])
+    def join(self, request):
+        code = re.sub(r"\D", "", str(request.data.get("code", "")))
+        try:
+            board = models.Board.objects.get(join_code=code)
+        except models.Board.DoesNotExist:
+            return Response({"detail": "Invalid code."}, status=404)
+
+        models.BoardUser.objects.get_or_create(board=board, user=request.user)
+        return Response(self.get_serializer(board).data)
+
+    @action(detail=True, methods=["post"], url_path="reset-code")
+    def reset_code(self, request, pk=None):
+        board = self.get_object()
+        board.reset_join_code()
+        return Response(self.get_serializer(board).data)
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):

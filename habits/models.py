@@ -1,3 +1,4 @@
+import secrets
 from decimal import Decimal
 
 from django.contrib.auth.models import AbstractUser
@@ -31,10 +32,19 @@ class User(AbstractUser):
         return paid - owed
 
 
+def generate_join_code():
+    # 9-digit numeric code, zero-padded; retried on the rare collision.
+    while True:
+        code = f"{secrets.randbelow(1_000_000_000):09d}"
+        if not Board.objects.filter(join_code=code).exists():
+            return code
+
+
 class Board(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, blank=False, null=False)
     description = models.TextField(blank=True, null=True)
+    join_code = models.CharField(max_length=9, unique=True, default=generate_join_code, editable=False)
     created_by = models.ForeignKey(
         get_user_model(),
         on_delete=models.SET_NULL,
@@ -44,6 +54,10 @@ class Board(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def reset_join_code(self):
+        self.join_code = generate_join_code()
+        self.save(update_fields=["join_code"])
 
     def get_balances(self):
         # Detailed per-user balances

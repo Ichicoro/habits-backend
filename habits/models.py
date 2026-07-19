@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.contrib.auth import get_user_model
@@ -19,14 +21,14 @@ class User(AbstractUser):
     profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
 
     def balance_in_board(self, board):
-        paid = self.paid_expenses.filter(board=board).aggregate(total=models.Sum("amount"))["total"] or 0  # type: ignore
+        paid = self.paid_expenses.filter(board=board).aggregate(total=models.Sum("amount"))["total"] or Decimal("0")  # type: ignore
         owed = (
             ExpenseSplit.objects.filter(user=self, expense__board=board).aggregate(
                 total=models.Sum("share_amount")
             )["total"]
-            or 0
+            or Decimal("0")
         )
-        return float(paid - owed)
+        return paid - owed
 
 
 class Board(models.Model):
@@ -34,7 +36,11 @@ class Board(models.Model):
     name = models.CharField(max_length=255, blank=False, null=False)
     description = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey(
-        get_user_model(), on_delete=models.DO_NOTHING, related_name="created_habit_boards"
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        related_name="created_habit_boards",
+        null=True,
+        blank=True,
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -58,6 +64,9 @@ class Board(models.Model):
         return user_balances
 
     objects = managers.BalanceManager()
+
+    class Meta:
+        ordering = ["created_at"]
 
     def __str__(self):
         return self.name
@@ -164,6 +173,9 @@ class Expense(models.Model):
     category = models.ForeignKey(
         ExpenseCategory, on_delete=models.CASCADE, related_name="expenses", null=True, blank=True
     )
+
+    class Meta:
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.amount} spent by {self.payer.username} (category: {self.category.name if self.category else None})"

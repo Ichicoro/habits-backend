@@ -1,4 +1,6 @@
-from django.db.models import Manager, F, FloatField, Sum, OuterRef, Subquery
+from decimal import Decimal
+
+from django.db.models import DecimalField, F, Manager, OuterRef, Subquery, Sum
 from django.db.models.functions import Coalesce
 from . import models
 
@@ -6,6 +8,7 @@ from . import models
 class BalanceManager(Manager):
     def user_balances(self, board_id):
         group = models.Board.objects.get(id=board_id)
+        money = DecimalField(max_digits=10, decimal_places=2)
 
         # Paid: sum expenses where payer=user and expense.board_id=board_id
         paid_qs = (
@@ -26,9 +29,9 @@ class BalanceManager(Manager):
         users = (
             models.User.objects.filter(habit_boards__board=group)
             .annotate(
-                paid=Subquery(paid_qs, output_field=FloatField()),
-                owed=Subquery(owed_qs, output_field=FloatField()),
-                balance=F("paid") - Coalesce(F("owed"), 0),
+                paid=Coalesce(Subquery(paid_qs, output_field=money), Decimal("0")),
+                owed=Coalesce(Subquery(owed_qs, output_field=money), Decimal("0")),
+                balance=F("paid") - F("owed"),
             )
             .values("username", "paid", "owed", "balance")
         )

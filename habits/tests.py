@@ -138,7 +138,7 @@ class APITests(APITestCase):
         url = reverse("board-list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        boards = response.json()
+        boards = response.json()["results"]
         self.assertEqual(len(boards), 1)
         self.assertEqual(boards[0]["name"], "Default Board")
 
@@ -328,7 +328,7 @@ class APITests(APITestCase):
         # Test retrieving expenses for board 1
         response = self.client.get(url_nested)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        expenses = response.json()
+        expenses = response.json()["results"]
         self.assertEqual(len(expenses), 2)
         descriptions = [e["description"] for e in expenses]
         self.assertIn("Board 1 Expense 1", descriptions)
@@ -338,7 +338,7 @@ class APITests(APITestCase):
         # Test retrieving expenses for board 2
         response = self.client.get(url_nested2)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        expenses = response.json()
+        expenses = response.json()["results"]
         self.assertEqual(len(expenses), 1)
         self.assertEqual(expenses[0]["description"], "Board 2 Expense 1")
 

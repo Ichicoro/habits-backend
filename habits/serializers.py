@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -154,13 +154,18 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
         if len(user_ids) != len(set(user_ids)):
             raise serializers.ValidationError("Each user can appear only once in splits.")
 
-        share = expense.amount / len(users)
+        # Split to the cent, then hand any leftover pennies (from rounding)
+        # to the first user so shares always sum exactly to expense.amount.
+        cent = Decimal("0.01")
+        share = (expense.amount / len(users)).quantize(cent, rounding=ROUND_DOWN)
+        remainder = expense.amount - (share * len(users))
 
-        for user in users:
+        for i, user in enumerate(users):
+            user_share = share + remainder if i == 0 else share
             models.ExpenseSplit.objects.update_or_create(
                 expense=expense,
                 user=user,
-                defaults={"share_amount": share, "percentage": None},
+                defaults={"share_amount": user_share, "percentage": None},
             )
 
     def handle_percentage_splits(self, expense, splits_data):

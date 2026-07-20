@@ -2,11 +2,25 @@ import re
 
 from habits import models, serializers
 from rest_framework import viewsets, permissions
+from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action
+from rest_framework.generics import CreateAPIView
 from rest_framework.response import Response
 from rest_framework.routers import DefaultRouter
 
 from habits.permissions import IsInBoardPermission
+
+
+class RegisterView(CreateAPIView):
+    serializer_class = serializers.RegisterSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({"token": token.key}, status=201)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -82,6 +96,14 @@ class BoardsViewSet(viewsets.ModelViewSet):
         board = self.get_object()
         board.reset_join_code()
         return Response(self.get_serializer(board).data)
+
+    @action(detail=True, methods=["post"])
+    def leave(self, request, pk=None):
+        board = self.get_object()
+        if models.BoardUser.objects.filter(user=request.user).count() <= 1:
+            return Response({"detail": "You can't leave your only board."}, status=400)
+        models.BoardUser.objects.filter(board=board, user=request.user).delete()
+        return Response(status=204)
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):

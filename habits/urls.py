@@ -24,7 +24,7 @@ from django.urls import path
 from django.views.static import serve
 from rest_framework.authtoken import views
 
-from habits.views import router
+from habits.views import RegisterView, router
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
@@ -46,6 +46,7 @@ urlpatterns = [
     ),
     path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     path("api/auth/login/", views.obtain_auth_token),
+    path("api/auth/register/", RegisterView.as_view()),
     path("api/", include(router.urls)),
     # Flutter SPA - serve for all non-API, non-admin routes
     path("", lambda r: flutter_redirect(r, "index.html")),

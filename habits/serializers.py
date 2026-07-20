@@ -1,6 +1,7 @@
 from decimal import ROUND_DOWN, Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.db.models import Q
 from habits import models
@@ -13,6 +14,31 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.User
         fields = ("id", "username", "email", "first_name", "last_name", "profile_picture")
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+
+    class Meta:
+        model = models.User
+        fields = ("username", "email", "password", "first_name", "last_name")
+        extra_kwargs = {
+            "email": {"required": True},
+            "first_name": {"required": False},
+            "last_name": {"required": False},
+        }
+
+    def validate_username(self, value):
+        if models.User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("A user with that username already exists.")
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        user = models.User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
 
 
 class HabitSerializer(serializers.ModelSerializer):

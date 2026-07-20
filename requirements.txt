@@ -33,6 +33,7 @@ pytest==8.3.5
 PyYAML==6.0.3
 referencing==0.37.0
 rpds-py==0.30.0
+sentry-sdk==2.66.0
 sqlparse==0.5.3
 tomlkit==0.13.2
 uritemplate==4.2.0

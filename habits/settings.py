@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 import os
 from pathlib import Path
 
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -29,6 +32,19 @@ SECRET_KEY = os.environ.get(
 DEBUG = bool(os.environ.get("DEBUG", default=0))
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+
+SENTRY_DSN = os.environ.get("SENTRY_DSN")
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        send_default_pii=False,
+        traces_sample_rate=0.2,
+        # Lets Sentry group/filter issues by where they came from -
+        # tied to DEBUG since that's already how this project distinguishes
+        # a local/dev run from a real deployment.
+        environment="development" if DEBUG else "production",
+    )
 
 
 # Application definition
@@ -52,8 +68,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
-    # "django.middleware.csrf.CsrfViewMiddleware",
-    "habits.middleware.DisableCSRFMiddleware",  # https://stackoverflow.com/a/47888695
+    "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -151,7 +166,6 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [
     BASE_DIR / "static",
-    BASE_DIR / "flutter-app",  # Serve Flutter web app via WhiteNoise
 ]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
@@ -169,13 +183,56 @@ REST_FRAMEWORK = {
     # YOUR SETTINGS
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.BasicAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ],
     "COERCE_DECIMAL_TO_STRING": False,
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 100,
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        # Baseline safety net against bugs/abuse on every endpoint.
+        "anon": "300/day",
+        "user": "100000/day",
+        # Tighter limits on the endpoints that matter most:
+        # unauthenticated account creation, login attempts, and
+        # brute-forcing a board's numeric join code.
+        "register": "5/hour",
+        "login": "10/hour",
+        "join": "15/hour",
+    },
+}
+
+# Only the Expo app talks to this API - no browser clients, so CORS is
+# intentionally not configured. Re-add django-cors-headers if that changes.
+
+# Security headers. These assume TLS is terminated at a reverse proxy/load
+# balancer in front of gunicorn that forwards the original scheme via the
+# X-Forwarded-Proto header (true on most PaaS hosts). If that's not the case
+# for your deployment, SECURE_SSL_REDIRECT will cause a redirect loop -
+# verify before enabling in prod.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": os.environ.get("DJANGO_LOGLEVEL", "INFO").upper(),
+    },
 }
 
 SPECTACULAR_SETTINGS = {

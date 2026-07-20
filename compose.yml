@@ -30,6 +30,7 @@ services:
      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
      DATABASE_HOST: db
      DATABASE_PORT: 5432
+     SENTRY_DSN: ${SENTRY_DSN}
    env_file:
      - .env
 volumes:

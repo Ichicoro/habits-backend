@@ -128,7 +128,7 @@ class APITests(APITestCase):
         self.user = User.objects.create_user(
             username="apiuser", email="api@example.com", password="apipassword123"
         )
-        self.client.login(username="apiuser", password="apipassword123")
+        self.client.force_authenticate(user=self.user)
 
     def test_new_user_has_no_boards(self):
         """Test that a newly registered user has no boards until they create/join one."""

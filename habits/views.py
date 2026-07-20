@@ -3,17 +3,27 @@ import re
 from habits import models, serializers
 from rest_framework import viewsets, permissions
 from rest_framework.authtoken.models import Token
+from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import action
 from rest_framework.generics import CreateAPIView
 from rest_framework.response import Response
 from rest_framework.routers import DefaultRouter
+from rest_framework.throttling import ScopedRateThrottle
 
 from habits.permissions import IsInBoardPermission
+
+
+class ThrottledObtainAuthToken(ObtainAuthToken):
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
 
 class RegisterView(CreateAPIView):
     serializer_class = serializers.RegisterSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "register"
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -75,6 +85,12 @@ class BoardsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.queryset.filter(users__user=self.request.user)
+
+    def get_throttles(self):
+        if self.action == "join":
+            self.throttle_scope = "join"
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
 
     def perform_create(self, serializer):
         board = serializer.save(created_by=self.request.user)

@@ -15,26 +15,14 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-import os
 from django.conf import settings
-from django.conf.urls.static import static
 from django.urls import include, path, re_path
 from django.contrib import admin
-from django.urls import path
 from django.views.static import serve
-from rest_framework.authtoken import views
 
-from habits.views import RegisterView, router
+from habits.views import RegisterView, ThrottledObtainAuthToken, router
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FLUTTER_WEB_APP = os.path.join(BASE_DIR, "flutter-app")
-
-
-def flutter_redirect(request, resource):
-    return serve(request, resource, FLUTTER_WEB_APP)
-
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -45,10 +33,15 @@ urlpatterns = [
         name="swagger-ui",
     ),
     path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
-    path("api/auth/login/", views.obtain_auth_token),
+    path("api/auth/login/", ThrottledObtainAuthToken.as_view()),
     path("api/auth/register/", RegisterView.as_view()),
     path("api/", include(router.urls)),
-    # Flutter SPA - serve for all non-API, non-admin routes
-    path("", lambda r: flutter_redirect(r, "index.html")),
-    re_path(r"^(?!api/)(?!admin/)(?!static/)(?!media/)(?P<resource>.*)$", flutter_redirect),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # Serve user-uploaded media (e.g. profile pictures) unconditionally -
+    # django.conf.urls.static.static() is a DEBUG-only no-op, which would
+    # silently 404 all media in production.
+    re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+]
+
+if settings.DEBUG:
+    # Hit this to confirm Sentry is receiving events. Not routed in production.
+    urlpatterns.append(path("sentry-debug/", lambda request: 1 / 0))

@@ -100,8 +100,11 @@ class BoardsViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def leave(self, request, pk=None):
         board = self.get_object()
-        if models.BoardUser.objects.filter(user=request.user).count() <= 1:
-            return Response({"detail": "You can't leave your only board."}, status=400)
+        if board.users.count() <= 1:  # type: ignore
+            return Response(
+                {"detail": "You're the only member of this board. Delete it instead of leaving."},
+                status=400,
+            )
         models.BoardUser.objects.filter(board=board, user=request.user).delete()
         return Response(status=204)
 

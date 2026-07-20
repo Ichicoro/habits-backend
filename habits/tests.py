@@ -33,13 +33,10 @@ class UserModelTests(TestCase):
         assert self.user.is_staff is False
         assert self.user.is_superuser is False
 
-    def test_user_has_default_board(self):
-        """Test that a default board is created for the user."""
+    def test_user_has_no_default_board(self):
+        """Test that no board is created automatically for a new user."""
         board = Board.objects.filter(created_by=self.user).first()
-        assert board is not None, "Default board was not created for the user"
-        self.assertEqual(board.name, "Default Board")
-        self.assertEqual(board.description, "This is your default board.")
-        self.assertEqual(board.created_by, self.user)
+        assert board is None, "A board was unexpectedly created for the user"
 
     def test_user_string_representation(self):
         """Test the string representation of a user."""
@@ -133,27 +130,35 @@ class APITests(APITestCase):
         )
         self.client.login(username="apiuser", password="apipassword123")
 
-    def test_get_user_default_board(self):
-        """Test retrieving user's board via API."""
+    def test_new_user_has_no_boards(self):
+        """Test that a newly registered user has no boards until they create/join one."""
         url = reverse("board-list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         boards = response.json()["results"]
-        self.assertEqual(len(boards), 1)
-        self.assertEqual(boards[0]["name"], "Default Board")
+        self.assertEqual(len(boards), 0)
 
-        url = reverse("board-detail", args=[boards[0]["id"]])
+    def test_create_and_get_board(self):
+        """Test creating a board via the API and retrieving it."""
+        url = reverse("board-list")
+        response = self.client.post(
+            url, {"name": "My Board", "description": "A board"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        created = response.json()
+
+        url = reverse("board-detail", args=[created["id"]])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         board = response.json()
-        self.assertEqual(board["name"], "Default Board")
-        self.assertEqual(board["description"], "This is your default board.")
+        self.assertEqual(board["name"], "My Board")
+        self.assertEqual(board["description"], "A board")
         self.assertEqual(board["created_by"], str(self.user.id))
 
     def test_user_create_expense(self):
         """Test creating an expense via API."""
-        board = Board.objects.filter(created_by=self.user).first()
-        assert board is not None, "Default board was not found for the user"
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
         user2 = self.create_random_user()
         BoardUser.objects.create(user=user2, board=board)
         url = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
@@ -194,8 +199,8 @@ class APITests(APITestCase):
 
     def test_user_various_expenses(self):
         """Test creating and updating various types of expenses via API."""
-        board = Board.objects.filter(created_by=self.user).first()
-        assert board is not None, "Default board was not found for the user"
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
         user2 = self.create_random_user()
         user3 = self.create_random_user()
         BoardUser.objects.create(user=user2, board=board)
@@ -280,8 +285,8 @@ class APITests(APITestCase):
 
     def test_nested_board_expenses_list(self):
         """Test retrieving expenses for a specific board via nested route."""
-        board = Board.objects.filter(created_by=self.user).first()
-        assert board is not None, "Default board was not found for the user"
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
         user2 = self.create_random_user()
         BoardUser.objects.create(user=user2, board=board)
 
@@ -344,8 +349,8 @@ class APITests(APITestCase):
 
     def test_nested_board_expenses_detail(self):
         """Test retrieving a specific expense via nested route."""
-        board = Board.objects.filter(created_by=self.user).first()
-        assert board is not None, "Default board was not found for the user"
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
 
         # Create an expense
         expense = Expense.objects.create(
@@ -370,8 +375,8 @@ class APITests(APITestCase):
 
     def test_nested_board_expenses_update(self):
         """Test updating an expense via nested route."""
-        board = Board.objects.filter(created_by=self.user).first()
-        assert board is not None, "Default board was not found for the user"
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
         user2 = self.create_random_user()
         BoardUser.objects.create(user=user2, board=board)
 
@@ -429,3 +434,48 @@ class APITests(APITestCase):
         url = reverse("board-expenses-list", kwargs={"board_pk": str(other_board.id)})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_leave_board_with_other_members(self):
+        """A user can leave a board as long as another member remains."""
+        board = Board.objects.create(name="Shared Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        user2 = self.create_random_user()
+        BoardUser.objects.create(user=user2, board=board)
+
+        url = reverse("board-leave", args=[str(board.id)])
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(BoardUser.objects.filter(board=board, user=self.user).exists())
+        self.assertTrue(BoardUser.objects.filter(board=board, user=user2).exists())
+
+    def test_cannot_leave_board_as_sole_member(self):
+        """A user can't leave a board they're the only member of."""
+        board = Board.objects.create(name="Solo Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+
+        url = reverse("board-leave", args=[str(board.id)])
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(BoardUser.objects.filter(board=board, user=self.user).exists())
+
+    def test_delete_only_board(self):
+        """Deleting a user's only board should succeed and cascade to its expenses."""
+        board = Board.objects.create(name="Solo Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        expense = Expense.objects.create(
+            payer=self.user,
+            board=board,
+            amount=Decimal("10.00"),
+            description="Soon deleted",
+            split_type="equal",
+        )
+        ExpenseSplit.objects.create(expense=expense, user=self.user, share_amount=Decimal("10.00"))
+
+        url = reverse("board-detail", args=[str(board.id)])
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Board.objects.filter(id=board.id).exists())
+        self.assertFalse(Expense.objects.filter(board_id=board.id).exists())
+
+        response = self.client.get(reverse("board-list"))
+        self.assertEqual(response.json()["results"], [])

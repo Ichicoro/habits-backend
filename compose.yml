@@ -11,19 +11,22 @@ services:
      - postgres_data:/var/lib/postgresql/data
    env_file:
      - .env
+   networks:
+     - habits
 
  habits-web:
    build: .
    container_name: habits-docker
-   ports:
-     - "3000:3000"
    depends_on:
      - db
+   networks:
+     - habits
    environment:
      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
      DEBUG: ${DEBUG}
      DJANGO_LOGLEVEL: ${DJANGO_LOGLEVEL}
      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+     DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS}
      DATABASE_ENGINE: postgresql_psycopg2
      DATABASE_NAME: ${DATABASE_NAME}
      DATABASE_USERNAME: ${DATABASE_USERNAME}
@@ -33,5 +36,10 @@ services:
      SENTRY_DSN: ${SENTRY_DSN}
    env_file:
      - .env
+
 volumes:
    postgres_data:
+  
+networks:
+  habits:
+    driver: bridge

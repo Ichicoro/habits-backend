@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Echoes</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; max-width: 720px; margin: 2rem auto; padding: 0 1.25rem; color: #1c1c1e; }
+  h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; }
+  .effective-date { color: #666; margin-top: 0; }
+  a { color: #0a66c2; }
+  code { background: #f2f2f2; padding: 0.1rem 0.35rem; border-radius: 4px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #19191c; color: #e6e6e6; }
+    a { color: #6cb2ff; }
+    code { background: #2c2c2e; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy for Echoes</h1>
+<p class="effective-date"><strong>Effective date:</strong> July 21, 2026</p>
+
+<p>Echoes ("Echoes," "we," "us") is a mobile app for tracking shared habits and splitting expenses with the people you live with or share responsibilities with, organized into "boards." This policy explains what information Echoes collects, how it's used, and the choices you have.</p>
+
+<p>Echoes is operated by Zelda, based in Italy, who is the data controller for the personal information described below.</p>
+
+<h2>Information we collect</h2>
+<p><strong>Account information.</strong> When you register, we collect a username, email address, and password. First and last name and a profile picture are optional. Your password is never stored in plain text — it's hashed before it touches our database.</p>
+<p><strong>Habit and board data.</strong> Names, descriptions, and completion history for habits you create, and the name, description, and membership of any board you create or join. Boards are joined using a numeric invite code.</p>
+<p><strong>Expense data.</strong> Amounts, descriptions, dates, categories, and splits for any shared expenses you or others log within a board.</p>
+<p><strong>Device and diagnostic data.</strong> We use <a href="https://sentry.io" target="_blank" rel="noopener">Sentry</a> for crash and error reporting, on both the app and our backend. When something goes wrong, Sentry receives a stack trace, the app/OS version, and device type. Our backend is configured to strip personal data (<code>send_default_pii=False</code>) from these reports before they're sent.</p>
+<p>We do not use advertising or analytics SDKs, and we do not sell your data to anyone.</p>
+
+<h2>Legal basis for processing (GDPR)</h2>
+<p>If you're in the EEA/UK, here's what we rely on to process each category of data:</p>
+<ul>
+  <li><strong>Account information</strong> (username, email, password, optional name/photo) — processed under <strong>contractual necessity</strong> (Art. 6(1)(b)): we can't create or run your account without it.</li>
+  <li><strong>Habit and board data</strong> — processed under <strong>contractual necessity</strong>: tracking habits within boards is the core service you're signing up for.</li>
+  <li><strong>Expense data</strong> — processed under <strong>contractual necessity</strong>: logging and splitting expenses within a board is a core service feature.</li>
+  <li><strong>Device and diagnostic data (Sentry)</strong> — processed under <strong>legitimate interest</strong> (Art. 6(1)(f)): our interest is keeping the app working and fixing crashes, weighed against your privacy by stripping personal data from these reports before they're sent (<code>send_default_pii=False</code>) and limiting what's collected to stack traces and device/app version.</li>
+  <li><strong>Throttling and abuse prevention</strong> (e.g. rate limits on login, registration, and board join attempts) — processed under <strong>legitimate interest</strong>: protecting the service and other users' accounts from brute-force and abuse.</li>
+</ul>
+<p>Where we rely on legitimate interest, we've limited collection to what's needed for that purpose and weighed it against your privacy — you can object at any time using the contact below, and we'll stop unless we have a compelling override.</p>
+
+<h2>How information is shared</h2>
+<p>Echoes is built around shared boards — other members of a board you join can see the habits, expenses, and expense splits you contribute to that board, along with your username, name, and profile picture. This visibility is the core feature of the app, not a side effect.</p>
+<p>Beyond board members, we don't share your information with third parties, except:</p>
+<ul>
+  <li><strong>Sentry</strong>, our error-monitoring provider, which processes crash/diagnostic data as described above.</li>
+  <li><strong>Hosting infrastructure</strong> that stores the database and any uploaded profile pictures on our behalf.</li>
+  <li>If required to comply with a legal obligation, or to protect the rights, safety, and property of Echoes or its users.</li>
+</ul>
+
+<h2>Data storage and security</h2>
+<p>Your data is stored on servers we control, encrypted in transit via HTTPS/TLS. Authentication uses per-user API tokens rather than passwords sent with every request. We don't currently support account recovery via email, so keep your password somewhere safe.</p>
+
+<h2>Your choices</h2>
+<ul>
+  <li><strong>Edit or remove your profile picture</strong> at any time from within the app.</li>
+  <li><strong>Leave a board</strong> at any time — your past contributions to that board (habits, expenses) remain, since they're shared history for other members, but you stop receiving new updates from it.</li>
+  <li><strong>Delete your account</strong> at any time from within the app. This permanently removes your account and profile picture. Contributions you made to boards you shared with others (habit entries, expenses) may remain visible to other board members as part of the board's shared history.</li>
+</ul>
+<p>To exercise any of these choices outside the app, or to ask us anything about your data, contact us at the address below.</p>
+
+<h2>Your rights (GDPR)</h2>
+<p>If you're in the EEA/UK, you have the right to access, correct, export, or delete your personal data, and to object to or restrict certain processing. Most of this you can do yourself in the app; for anything else, contact us at the address below and we'll handle it directly. If you're not satisfied with our response, you have the right to lodge a complaint with your local data protection supervisory authority.</p>
+
+<h2>How long we keep your data</h2>
+<p>We keep your account, habit, board, and expense data for as long as your account is active. If you delete your account, your account record and profile picture are removed immediately; data you contributed to shared boards may persist as part of other members' board history, as described above. Diagnostic data sent to Sentry is retained per Sentry's own retention settings, currently 90 days.</p>
+
+<h2>Children's privacy</h2>
+<p>Echoes is not directed at children under 16, and we don't knowingly collect information from them.</p>
+
+<h2>Changes to this policy</h2>
+<p>If we make material changes to this policy, we'll update the effective date above and, where appropriate, notify you in the app.</p>
+
+<h2>Contact</h2>
+<p>Questions about this policy or your data: <a href="mailto:echoes@zelda.sh">echoes@zelda.sh</a></p>
+
+</body>
+</html>

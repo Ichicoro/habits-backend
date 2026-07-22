@@ -40,6 +40,12 @@ urlpatterns = [
     # django.conf.urls.static.static() is a DEBUG-only no-op, which would
     # silently 404 all media in production.
     re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+    # App store listings need a stable, non-static-versioned URL for this.
+    path(
+        "privacy",
+        serve,
+        {"document_root": settings.BASE_DIR / "static", "path": "privacy.html"},
+    ),
 ]
 
 if settings.DEBUG:

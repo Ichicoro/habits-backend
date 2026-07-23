@@ -138,6 +138,90 @@ class APITests(APITestCase):
         boards = response.json()["results"]
         self.assertEqual(len(boards), 0)
 
+    def test_check_username_available(self):
+        url = reverse("user-check-username")
+        response = self.client.get(url, {"username": "someone-new"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.json()["available"])
+
+    def test_check_username_taken(self):
+        # Checked from another user's perspective, since a user's own
+        # username should never count as "taken" against themselves.
+        client = APIClient()
+        client.force_authenticate(user=self.create_random_user())
+        url = reverse("user-check-username")
+        response = client.get(url, {"username": "apiuser"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.json()["available"])
+
+    def test_check_username_case_insensitive(self):
+        client = APIClient()
+        client.force_authenticate(user=self.create_random_user())
+        url = reverse("user-check-username")
+        response = client.get(url, {"username": "APIUSER"})
+        self.assertFalse(response.json()["available"])
+
+    def test_check_username_excludes_self(self):
+        # The current user's own username should count as available to them.
+        self.client.force_authenticate(user=self.user)
+        url = reverse("user-check-username")
+        response = self.client.get(url, {"username": "apiuser"})
+        self.assertTrue(response.json()["available"])
+
+    def test_check_username_unauthenticated_allowed(self):
+        client = APIClient()
+        url = reverse("user-check-username")
+        response = client.get(url, {"username": "apiuser"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.json()["available"])
+
+    def test_update_username_collision_rejected(self):
+        other = self.create_random_user()
+        url = reverse("user-detail", args=[self.user.id])
+        response = self.client.patch(url, {"username": other.username}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_username_to_own_current_value_allowed(self):
+        url = reverse("user-detail", args=[self.user.id])
+        response = self.client.patch(url, {"username": "apiuser"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_check_email_taken(self):
+        client = APIClient()
+        client.force_authenticate(user=self.create_random_user())
+        url = reverse("user-check-email")
+        response = client.get(url, {"email": "api@example.com"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.json()["available"])
+
+    def test_check_email_available(self):
+        url = reverse("user-check-email")
+        response = self.client.get(url, {"email": "nobody@example.com"})
+        self.assertTrue(response.json()["available"])
+
+    def test_check_email_excludes_self(self):
+        url = reverse("user-check-email")
+        response = self.client.get(url, {"email": "api@example.com"})
+        self.assertTrue(response.json()["available"])
+
+    def test_update_email_collision_rejected(self):
+        other = self.create_random_user()
+        url = reverse("user-detail", args=[self.user.id])
+        response = self.client.patch(url, {"email": other.email}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_email_collision_rejected(self):
+        response = self.client.post(
+            "/api/auth/register/",
+            {
+                "username": "brandnewuser",
+                "email": "api@example.com",
+                "password": "somepassword123",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_create_and_get_board(self):
         """Test creating a board via the API and retrieving it."""
         url = reverse("board-list")

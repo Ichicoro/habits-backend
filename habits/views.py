@@ -40,6 +40,19 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return models.User.objects.filter(pk=self.request.user.pk)
 
+    def get_throttles(self):
+        if self.action in ("check_username", "check_email"):
+            self.throttle_scope = "check-username"
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
+
+    def get_permissions(self):
+        # Unauthenticated users need these to get live feedback while
+        # choosing a username/email during signup.
+        if self.action in ("check_username", "check_email"):
+            return [permissions.AllowAny()]
+        return super().get_permissions()
+
     @action(
         detail=False,
         methods=["get"],
@@ -49,6 +62,38 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_me(self, request, *args, **kwargs):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="check-username",
+        url_name="check-username",
+    )
+    def check_username(self, request, *args, **kwargs):
+        username = request.query_params.get("username", "")
+        if not username:
+            return Response({"username": "This field is required."}, status=400)
+        qs = models.User.objects.filter(username__iexact=username)
+        if request.user.is_authenticated:
+            qs = qs.exclude(pk=request.user.pk)
+        available = not qs.exists()
+        return Response({"available": available})
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="check-email",
+        url_name="check-email",
+    )
+    def check_email(self, request, *args, **kwargs):
+        email = request.query_params.get("email", "")
+        if not email:
+            return Response({"email": "This field is required."}, status=400)
+        qs = models.User.objects.filter(email__iexact=email)
+        if request.user.is_authenticated:
+            qs = qs.exclude(pk=request.user.pk)
+        available = not qs.exists()
+        return Response({"available": available})
 
     @action(
         detail=False,

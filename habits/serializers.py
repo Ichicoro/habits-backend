@@ -15,6 +15,22 @@ class UserSerializer(serializers.ModelSerializer):
         model = models.User
         fields = ("id", "username", "email", "first_name", "last_name", "profile_picture")
 
+    def validate_username(self, value):
+        qs = models.User.objects.filter(username__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A user with that username already exists.")
+        return value
+
+    def validate_email(self, value):
+        qs = models.User.objects.filter(email__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A user with that email already exists.")
+        return value
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -30,6 +46,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_username(self, value):
         if models.User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("A user with that username already exists.")
+        return value
+
+    def validate_email(self, value):
+        if models.User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with that email already exists.")
         return value
 
     def create(self, validated_data):

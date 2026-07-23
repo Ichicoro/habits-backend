@@ -206,6 +206,7 @@ REST_FRAMEWORK = {
         "register": "5/hour",
         "login": "10/hour",
         "join": "15/hour",
+        "check-username": "30/minute",
     },
 }
 

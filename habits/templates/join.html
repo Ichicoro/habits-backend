@@ -1,0 +1,154 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<title>Join a board — Echoes</title>
+
+<style>
+  @font-face {
+    font-family: "Space Grotesk";
+    src: url("{% static 'join/fonts/SpaceGrotesk-Variable.ttf' %}") format("truetype");
+    font-weight: 300 700;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Basteleur-Bold";
+    src: url("{% static 'join/fonts/Basteleur-Bold.otf' %}") format("opentype");
+    font-weight: 700;
+    font-display: swap;
+  }
+
+  :root {
+    --background: #F2F2F7;
+    --background-element: #FFFFFF;
+    --text: #000000;
+    --text-secondary: #60646C;
+    --accent: #6C5CE7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #19191C;
+      --background-element: #212124;
+      --text: #FFFFFF;
+      --text-secondary: #B0B4BA;
+      --accent: #9F95EF;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--background);
+    color: var(--text);
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  main {
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+  }
+  .wordmark {
+    font-family: "Basteleur-Bold", serif;
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  h1 {
+    font-family: "Basteleur-Bold", serif;
+    font-weight: 700;
+    font-size: 2rem;
+    line-height: 1.2;
+    margin: 0 0 0.5rem;
+  }
+  p.subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin: 0 0 1rem;
+  }
+  .qr-card {
+    background: var(--background-element);
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .qr-wrap {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 12px;
+    display: inline-flex;
+  }
+  .qr-wrap svg {
+    width: 200px;
+    height: 200px;
+    display: block;
+  }
+  .code {
+    font-family: "Basteleur-Bold", serif;
+    font-size: 1.25rem;
+    letter-spacing: 3px;
+    margin-top: 16px;
+  }
+  .hint {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin-top: 8px;
+    padding: 0 12px;
+  }
+  a.button {
+    display: block;
+    font-family: "Space Grotesk", sans-serif;
+    font-weight: 600;
+    font-size: 1rem;
+    text-decoration: none;
+    color: #FFFFFF;
+    background: var(--accent);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  a.button:active {
+    opacity: 0.85;
+  }
+  .no-app {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="wordmark">Echoes</div>
+
+  {% if code %}
+    <h1>You&rsquo;ve been invited<br>to join a board!</h1>
+    <p class="subtitle">Open the link to join, or scan the code with another device.</p>
+
+    <div class="qr-card">
+      <div class="qr-wrap">{{ qr_svg|safe }}</div>
+      <div class="code">{{ code|slice:":3" }}&ndash;{{ code|slice:"3:6" }}&ndash;{{ code|slice:"6:9" }}</div>
+      <div class="hint">Scanning opens Echoes and joins the board directly</div>
+    </div>
+
+    <a class="button" href="{{ deep_link }}" id="open-app">Open in Echoes</a>
+    <p class="no-app">Don&rsquo;t have Echoes yet? Install it from the App Store or Google Play, then tap this link again.</p>
+
+    <script>
+      (function () {
+        window.location.href = {{ deep_link|escapejs }};
+      })();
+    </script>
+  {% else %}
+    <h1>Invite link missing a code</h1>
+    <p class="subtitle">Ask whoever invited you to resend the link.</p>
+  {% endif %}
+</main>
+
+</body>
+</html>

@@ -20,7 +20,14 @@ from django.urls import include, path, re_path
 from django.contrib import admin
 from django.views.static import serve
 
-from habits.views import RegisterView, ThrottledObtainAuthToken, router
+from habits.views import (
+    RegisterView,
+    ThrottledObtainAuthToken,
+    android_asset_links,
+    apple_app_site_association,
+    join_page,
+    router,
+)
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
@@ -51,6 +58,11 @@ urlpatterns = [
         serve,
         {"document_root": settings.BASE_DIR / "static", "path": "data-deletion.html"},
     ),
+    path("join", join_page),
+    # Universal Links / App Links verification files - must be served at
+    # exactly these paths, unredirected, for iOS/Android to trust /join.
+    path(".well-known/apple-app-site-association", apple_app_site_association),
+    path(".well-known/assetlinks.json", android_asset_links),
 ]
 
 if settings.DEBUG:

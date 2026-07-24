@@ -1,5 +1,10 @@
+import io
 import re
 
+import qrcode
+import qrcode.image.svg
+from django.http import JsonResponse
+from django.shortcuts import render
 from habits import models, serializers
 from rest_framework import viewsets, permissions
 from rest_framework.authtoken.models import Token
@@ -11,6 +16,64 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.throttling import ScopedRateThrottle
 
 from habits.permissions import IsInBoardPermission
+
+JOIN_CODE_RE = re.compile(r"\D")
+
+
+def join_page(request):
+    """Landing page for board invite links: tries the app deep link, and
+    falls back to a QR code + button for people without the app open."""
+    code = JOIN_CODE_RE.sub("", request.GET.get("code", ""))[:9]
+    deep_link = f"echoes://join?code={code}" if code else "echoes://join"
+
+    qr_svg = None
+    if code:
+        img = qrcode.make(deep_link, image_factory=qrcode.image.svg.SvgPathImage, box_size=10, border=1)
+        buf = io.BytesIO()
+        img.save(buf)
+        qr_svg = buf.getvalue().decode("utf-8")
+
+    return render(
+        request,
+        "join.html",
+        {"code": code, "deep_link": deep_link, "qr_svg": qr_svg},
+    )
+
+
+# iOS Universal Links: lets tapping an https://echoes.zelda.sh/join link open
+# the app directly instead of Safari, on both the dev and prod bundle IDs.
+def apple_app_site_association(request):
+    return JsonResponse(
+        {
+            "applinks": {
+                "apps": [],
+                "details": [
+                    {"appID": "ZK989FQ3CP.sh.zelda.echoes", "paths": ["/join"]},
+                    {"appID": "ZK989FQ3CP.sh.zelda.echoes.dev", "paths": ["/join"]},
+                ],
+            }
+        }
+    )
+
+
+# Android App Links equivalent of the above. sha256_cert_fingerprints must
+# match the signing certificate used for the Play Store build.
+def android_asset_links(request):
+    return JsonResponse(
+        [
+            {
+                "relation": ["delegate_permission/common.handle_all_urls"],
+                "target": {
+                    "namespace": "android_app",
+                    "package_name": "sh.zelda.echoes",
+                    "sha256_cert_fingerprints": [
+                        "20:01:70:51:B2:D1:DF:4D:8D:35:70:BB:32:C1:89:6B:DB:E3:25:87:99:7C:28:36:84:77:0B:2F:57:33:DD:43"
+                    ],
+                },
+            }
+        ],
+        safe=False,
+    )
 
 
 class ThrottledObtainAuthToken(ObtainAuthToken):
@@ -149,8 +212,10 @@ class BoardsViewSet(viewsets.ModelViewSet):
         except models.Board.DoesNotExist:
             return Response({"detail": "Invalid code."}, status=404)
 
-        models.BoardUser.objects.get_or_create(board=board, user=request.user)
-        return Response(self.get_serializer(board).data)
+        _, created = models.BoardUser.objects.get_or_create(board=board, user=request.user)
+        data = self.get_serializer(board).data
+        data["already_member"] = not created
+        return Response(data)
 
     @action(detail=True, methods=["post"], url_path="reset-code")
     def reset_code(self, request, pk=None):

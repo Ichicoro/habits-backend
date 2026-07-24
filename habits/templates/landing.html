@@ -6,6 +6,8 @@
 <title>Echoes — Expenses, simplified.</title>
 <meta name="description" content="Split the fun, not the headache. Echoes is a free app for tracking shared expenses with the people you live with.">
 <link rel="icon" type="image/svg+xml" href="{% static 'landing/echoes.svg' %}">
+<link rel="preload" href="{% static 'join/fonts/SpaceGrotesk-Variable.ttf' %}" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="{% static 'join/fonts/Basteleur-Bold.otf' %}" as="font" type="font/otf" crossorigin>
 
 <style>
   @font-face {
@@ -72,7 +74,7 @@
   }
   .logo-mark svg { width: 100%; height: 100%; display: block; }
   .wordmark {
-    font-family: "Basteleur-Bold", serif;
+    font-family: "Basteleur-Bold", Georgia, "Times New Roman", Times, serif;
     font-size: 1.4rem;
   }
 
@@ -82,7 +84,7 @@
     padding: 56px 0 72px;
   }
   h1 {
-    font-family: "Basteleur-Bold", serif;
+    font-family: "Basteleur-Bold", Georgia, "Times New Roman", Times, serif;
     font-weight: 700;
     font-size: 3.25rem;
     line-height: 1.1;
@@ -104,7 +106,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-family: "Space Grotesk", sans-serif;
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     font-weight: 600;
     font-size: 1rem;
     text-decoration: none;
@@ -158,7 +160,7 @@
     min-height: 500px;
   }
   .feature-card h2 {
-    font-family: "Space Grotesk", sans-serif;
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     font-weight: 700;
     font-size: 1.3rem;
     line-height: 1.3;

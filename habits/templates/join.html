@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
 <title>Join a board — Echoes</title>
+<link rel="preload" href="{% static 'join/fonts/SpaceGrotesk-Variable.ttf' %}" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="{% static 'join/fonts/Basteleur-Bold.otf' %}" as="font" type="font/otf" crossorigin>
 
 <style>
   @font-face {
@@ -55,12 +57,12 @@
     text-align: center;
   }
   .wordmark {
-    font-family: "Basteleur-Bold", serif;
+    font-family: "Basteleur-Bold", Georgia, "Times New Roman", Times, serif;
     font-size: 1.5rem;
     margin-bottom: 2rem;
   }
   h1 {
-    font-family: "Basteleur-Bold", serif;
+    font-family: "Basteleur-Bold", Georgia, "Times New Roman", Times, serif;
     font-weight: 700;
     font-size: 2rem;
     line-height: 1.2;
@@ -89,7 +91,7 @@
     display: block;
   }
   .code {
-    font-family: "Basteleur-Bold", serif;
+    font-family: "Basteleur-Bold", Georgia, "Times New Roman", Times, serif;
     font-size: 1.25rem;
     letter-spacing: 3px;
     margin-top: 16px;

@@ -26,12 +26,14 @@ from habits.views import (
     android_asset_links,
     apple_app_site_association,
     join_page,
+    landing_page,
     router,
 )
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 urlpatterns = [
+    path("", landing_page, name="landing"),
     path("admin/", admin.site.urls),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
@@ -52,11 +54,13 @@ urlpatterns = [
         "privacy",
         serve,
         {"document_root": settings.BASE_DIR / "static", "path": "privacy.html"},
+        name="privacy",
     ),
     path(
         "data-deletion",
         serve,
         {"document_root": settings.BASE_DIR / "static", "path": "data-deletion.html"},
+        name="data-deletion",
     ),
     path("join", join_page),
     # Universal Links / App Links verification files - must be served at

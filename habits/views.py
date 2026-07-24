@@ -20,6 +20,10 @@ from habits.permissions import IsInBoardPermission
 JOIN_CODE_RE = re.compile(r"\D")
 
 
+def landing_page(request):
+    return render(request, "landing.html")
+
+
 def join_page(request):
     """Landing page for board invite links: tries the app deep link, and
     falls back to a QR code + button for people without the app open."""

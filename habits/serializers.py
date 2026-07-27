@@ -9,11 +9,19 @@ from rest_framework import serializers
 
 
 class UserSerializer(serializers.ModelSerializer):
-    profile_picture = serializers.ImageField(read_only=True, use_url=True)
+    # Intentionally not use_url=True / request-absolute: build_absolute_uri()
+    # depends on the Host header reaching Django correctly through whatever's
+    # in front of gunicorn in prod, which isn't reliable there. The app
+    # already resolves relative media paths against its own known-good API
+    # base URL, so we hand back the raw relative path instead.
+    profile_picture = serializers.SerializerMethodField()
 
     class Meta:
         model = models.User
         fields = ("id", "username", "email", "first_name", "last_name", "profile_picture")
+
+    def get_profile_picture(self, obj):
+        return obj.profile_picture.url if obj.profile_picture else None
 
     def validate_username(self, value):
         qs = models.User.objects.filter(username__iexact=value)

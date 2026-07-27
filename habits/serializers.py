@@ -73,6 +73,22 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class ExpenseCategoryCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.ExpenseCategory
+        fields = ("id", "name", "emoji", "board", "created_at", "updated_at")
+        read_only_fields = ("board", "created_at", "updated_at")
+
+    def create(self, validated_data):
+        board_id = self.context.get("board_id")
+        if not board_id:
+            raise serializers.ValidationError(
+                {"board": "Categories must be created via /boards/<id>/expense-categories/."}
+            )
+        validated_data["board"] = models.Board.objects.get(id=board_id)
+        return super().create(validated_data)
+
+
 class BoardSerializer(serializers.ModelSerializer):
     expense_categories = serializers.SerializerMethodField()
     users = serializers.SerializerMethodField()

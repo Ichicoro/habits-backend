@@ -10,4 +10,6 @@ class IsInBoardPermission(permissions.BasePermission):
         return models.BoardUser.objects.filter(board_id=board_pk, user=request.user).exists()
 
     def has_object_permission(self, request, view, obj):
+        if obj.board is None:
+            return False
         return obj.board.users.filter(user=request.user).exists()

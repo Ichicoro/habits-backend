@@ -3,6 +3,7 @@ import re
 
 import qrcode
 import qrcode.image.svg
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
 from habits import models, serializers
@@ -268,6 +269,26 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         return super().get_serializer_class()
 
 
+class ExpenseCategoryViewSet(viewsets.ModelViewSet):
+    queryset = models.ExpenseCategory.objects.all()
+    serializer_class = serializers.ExpenseCategorySerializer
+    permission_classes = [permissions.IsAuthenticated, IsInBoardPermission]
+
+    def get_queryset(self):
+        board_pk = self.kwargs.get("board_pk")
+        return self.queryset.filter(Q(board__id=board_pk) | Q(board__isnull=True))
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["board_id"] = self.kwargs.get("board_pk")
+        return context
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return serializers.ExpenseCategoryCreateSerializer
+        return super().get_serializer_class()
+
+
 router = DefaultRouter()
 router.register(r"users", UserViewSet, basename="user")
 router.register(r"habits", HabitViewSet)
@@ -276,3 +297,10 @@ router.register(r"expenses", ExpenseViewSet)
 
 # Nested route for board expenses
 router.register(r"boards/(?P<board_pk>[^/.]+)/expenses", ExpenseViewSet, basename="board-expenses")
+
+# Nested route for board expense categories
+router.register(
+    r"boards/(?P<board_pk>[^/.]+)/expense-categories",
+    ExpenseCategoryViewSet,
+    basename="board-expense-categories",
+)

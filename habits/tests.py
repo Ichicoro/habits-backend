@@ -367,6 +367,24 @@ class APITests(APITestCase):
             [Decimal("20.00"), Decimal("30.00")],
         )
 
+    def test_create_expense_category(self):
+        """Test creating a board-scoped expense category via the API."""
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        url = reverse("board-expense-categories-list", kwargs={"board_pk": str(board.id)})
+        response = self.client.post(url, {"name": "Groceries", "emoji": "🛒"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        category = response.json()
+        self.assertEqual(category["name"], "Groceries")
+        self.assertEqual(category["emoji"], "🛒")
+        self.assertEqual(ExpenseCategory.objects.get(id=category["id"]).board_id, board.id)
+
+    def test_create_expense_category_requires_board_membership(self):
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        url = reverse("board-expense-categories-list", kwargs={"board_pk": str(board.id)})
+        response = self.client.post(url, {"name": "Groceries", "emoji": "🛒"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_nested_board_expenses_list(self):
         """Test retrieving expenses for a specific board via nested route."""
         board = Board.objects.create(name="Test Board", created_by=self.user)

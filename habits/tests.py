@@ -560,6 +560,41 @@ class APITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(BoardUser.objects.filter(board=board, user=self.user).exists())
 
+    def test_remove_user_from_board(self):
+        """A board member can remove another member from the board."""
+        board = Board.objects.create(name="Shared Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        user2 = self.create_random_user()
+        BoardUser.objects.create(user=user2, board=board)
+
+        url = reverse("board-remove-user", args=[str(board.id)])
+        response = self.client.post(url, {"user_id": str(user2.id)}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(BoardUser.objects.filter(board=board, user=user2).exists())
+        self.assertTrue(BoardUser.objects.filter(board=board, user=self.user).exists())
+
+    def test_cannot_remove_last_user_from_board(self):
+        """Removing the only remaining member should fail; delete the board instead."""
+        board = Board.objects.create(name="Solo Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+
+        url = reverse("board-remove-user", args=[str(board.id)])
+        response = self.client.post(url, {"user_id": str(self.user.id)}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(BoardUser.objects.filter(board=board, user=self.user).exists())
+
+    def test_remove_user_not_on_board(self):
+        """Attempting to remove a user who isn't a member returns 404."""
+        board = Board.objects.create(name="Shared Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        user2 = self.create_random_user()
+        BoardUser.objects.create(user=user2, board=board)
+        other_user = self.create_random_user()
+
+        url = reverse("board-remove-user", args=[str(board.id)])
+        response = self.client.post(url, {"user_id": str(other_user.id)}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_delete_only_board(self):
         """Deleting a user's only board should succeed and cascade to its expenses."""
         board = Board.objects.create(name="Solo Board", created_by=self.user)

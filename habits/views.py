@@ -239,6 +239,23 @@ class BoardsViewSet(viewsets.ModelViewSet):
         models.BoardUser.objects.filter(board=board, user=request.user).delete()
         return Response(status=204)
 
+    @action(detail=True, methods=["post"], url_path="remove-user")
+    def remove_user(self, request, pk=None):
+        board = self.get_object()
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response({"detail": "user_id is required."}, status=400)
+        if board.users.count() <= 1:  # type: ignore
+            return Response(
+                {"detail": "You're the only member of this board. Delete it instead of removing users."},
+                status=400,
+            )
+        board_user = models.BoardUser.objects.filter(board=board, user_id=user_id).first()
+        if board_user is None:
+            return Response({"detail": "User is not a member of this board."}, status=404)
+        board_user.delete()
+        return Response(status=204)
+
 
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = models.Expense.objects.all()

@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="darkreader-lock">
 <title>Echoes — Expenses, simplified.</title>
 <meta name="description" content="Split the fun, not the headache. Echoes is a free app for tracking shared expenses with the people you live with.">
 <link rel="icon" type="image/svg+xml" href="{% static 'landing/echoes.svg' %}">
 <link rel="preload" href="{% static 'join/fonts/SpaceGrotesk-Variable.ttf' %}" as="font" type="font/ttf" crossorigin>
 <link rel="preload" href="{% static 'join/fonts/Basteleur-Bold.otf' %}" as="font" type="font/otf" crossorigin>
+<link rel="stylesheet" href="{% static 'theme.css' %}">
 
 <style>
   @font-face {
@@ -23,28 +25,11 @@
     font-display: swap;
   }
 
-  :root {
-    --page-bg: #FFFFFF;
-    --card-bg: #F2F2F7;
-    --text: #000000;
-    --text-secondary: #60646C;
-    --border: rgba(0, 0, 0, 0.12);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --page-bg: #19191C;
-      --card-bg: #212124;
-      --text: #FFFFFF;
-      --text-secondary: #B0B4BA;
-      --border: rgba(255, 255, 255, 0.14);
-    }
-  }
-
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    background: var(--page-bg);
+    background: var(--background);
     color: var(--text);
     margin: 0;
   }
@@ -115,11 +100,11 @@
     min-width: 168px;
   }
   .store-buttons a.store-primary {
-    background: var(--text);
-    color: var(--page-bg);
+    background: var(--accent);
+    color: #FFFFFF;
   }
   .store-buttons a.store-secondary {
-    background: var(--page-bg);
+    background: var(--background);
     color: var(--text);
     border: 1.5px solid var(--border);
   }
@@ -151,7 +136,7 @@
     }
   }
   .feature-card {
-    background: var(--card-bg);
+    background: var(--background-element);
     border-radius: 20px;
     padding: 28px 28px 0;
     display: flex;
@@ -260,7 +245,7 @@
     <p class="subtitle">Split the fun, not the headache.</p>
     <div class="store-buttons">
       <a class="store-primary" href="#">App Store</a>
-      <a class="store-secondary" href="https://play.google.com/store/apps/details?id=sh.zelda.echoes">Google Play</a>
+      <a class="store-primary" href="https://play.google.com/store/apps/details?id=sh.zelda.echoes">Google Play</a>
     </div>
     <p class="availability">Free &middot; iOS &amp; Android</p>
   </section>

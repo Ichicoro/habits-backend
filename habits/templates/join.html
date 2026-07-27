@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
+<meta name="darkreader-lock">
 <title>Join a board — Echoes</title>
 <link rel="preload" href="{% static 'join/fonts/SpaceGrotesk-Variable.ttf' %}" as="font" type="font/ttf" crossorigin>
 <link rel="preload" href="{% static 'join/fonts/Basteleur-Bold.otf' %}" as="font" type="font/otf" crossorigin>
+<link rel="stylesheet" href="{% static 'theme.css' %}">
 
 <style>
   @font-face {
@@ -20,23 +22,6 @@
     src: url("{% static 'join/fonts/Basteleur-Bold.otf' %}") format("opentype");
     font-weight: 700;
     font-display: swap;
-  }
-
-  :root {
-    --background: #F2F2F7;
-    --background-element: #FFFFFF;
-    --text: #000000;
-    --text-secondary: #60646C;
-    --accent: #6C5CE7;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: #19191C;
-      --background-element: #212124;
-      --text: #FFFFFF;
-      --text-secondary: #B0B4BA;
-      --accent: #9F95EF;
-    }
   }
 
   * { box-sizing: border-box; }

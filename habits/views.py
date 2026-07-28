@@ -11,6 +11,7 @@ from rest_framework import viewsets, permissions
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import CreateAPIView
 from rest_framework.response import Response
 from rest_framework.routers import DefaultRouter
@@ -303,7 +304,21 @@ class ExpenseCategoryViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == "create":
             return serializers.ExpenseCategoryCreateSerializer
+        if self.action in ("update", "partial_update"):
+            return serializers.ExpenseCategoryUpdateSerializer
         return super().get_serializer_class()
+
+    def perform_update(self, serializer):
+        if serializer.instance.board_id is None:
+            raise ValidationError({"detail": "Cannot edit a global expense category."})
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.board_id is None:
+            raise ValidationError({"detail": "Cannot delete a global expense category."})
+        if instance.expenses.exists():
+            raise ValidationError({"detail": "Cannot delete a category that is in use."})
+        instance.delete()
 
 
 router = DefaultRouter()

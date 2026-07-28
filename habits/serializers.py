@@ -76,9 +76,14 @@ class HabitSerializer(serializers.ModelSerializer):
 
 
 class ExpenseCategorySerializer(serializers.ModelSerializer):
+    in_use = serializers.SerializerMethodField()
+
     class Meta:
         model = models.ExpenseCategory
         fields = "__all__"
+
+    def get_in_use(self, obj):
+        return obj.expenses.exists()
 
 
 class ExpenseCategoryCreateSerializer(serializers.ModelSerializer):
@@ -95,6 +100,13 @@ class ExpenseCategoryCreateSerializer(serializers.ModelSerializer):
             )
         validated_data["board"] = models.Board.objects.get(id=board_id)
         return super().create(validated_data)
+
+
+class ExpenseCategoryUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.ExpenseCategory
+        fields = ("id", "name", "emoji", "board", "created_at", "updated_at")
+        read_only_fields = ("board", "created_at", "updated_at")
 
 
 class BoardSerializer(serializers.ModelSerializer):

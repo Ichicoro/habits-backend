@@ -385,6 +385,135 @@ class APITests(APITestCase):
         response = self.client.post(url, {"name": "Groceries", "emoji": "🛒"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_expense_category_in_use_flag(self):
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        category = ExpenseCategory.objects.create(name="Groceries", emoji="🛒", board=board)
+
+        url = reverse("board-detail", args=[str(board.id)])
+        response = self.client.get(url)
+        categories = {c["id"]: c for c in response.json()["expense_categories"]}
+        self.assertFalse(categories[str(category.id)]["in_use"])
+
+        Expense.objects.create(
+            board=board,
+            payer=self.user,
+            amount=Decimal("10.00"),
+            description="Milk",
+            split_type="equal",
+            category=category,
+        )
+        response = self.client.get(url)
+        categories = {c["id"]: c for c in response.json()["expense_categories"]}
+        self.assertTrue(categories[str(category.id)]["in_use"])
+
+    def test_delete_unused_expense_category(self):
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        category = ExpenseCategory.objects.create(name="Groceries", emoji="🛒", board=board)
+        url = reverse(
+            "board-expense-categories-detail",
+            kwargs={"board_pk": str(board.id), "pk": str(category.id)},
+        )
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT, response.content)
+        self.assertFalse(ExpenseCategory.objects.filter(id=category.id).exists())
+
+    def test_cannot_delete_in_use_expense_category(self):
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        category = ExpenseCategory.objects.create(name="Groceries", emoji="🛒", board=board)
+        Expense.objects.create(
+            board=board,
+            payer=self.user,
+            amount=Decimal("10.00"),
+            description="Milk",
+            split_type="equal",
+            category=category,
+        )
+        url = reverse(
+            "board-expense-categories-detail",
+            kwargs={"board_pk": str(board.id), "pk": str(category.id)},
+        )
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(ExpenseCategory.objects.filter(id=category.id).exists())
+
+    def test_cannot_delete_global_expense_category(self):
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        global_category = ExpenseCategory.objects.create(name="Other", emoji="💰", board=None)
+        url = reverse(
+            "board-expense-categories-detail",
+            kwargs={"board_pk": str(board.id), "pk": str(global_category.id)},
+        )
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(ExpenseCategory.objects.filter(id=global_category.id).exists())
+
+    def test_update_expense_category(self):
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        category = ExpenseCategory.objects.create(name="Groceries", emoji="🛒", board=board)
+        url = reverse(
+            "board-expense-categories-detail",
+            kwargs={"board_pk": str(board.id), "pk": str(category.id)},
+        )
+        response = self.client.patch(url, {"name": "Food", "emoji": "🍔"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        category.refresh_from_db()
+        self.assertEqual(category.name, "Food")
+        self.assertEqual(category.emoji, "🍔")
+
+    def test_update_in_use_expense_category(self):
+        """In-use categories can still be renamed, just not deleted."""
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        category = ExpenseCategory.objects.create(name="Groceries", emoji="🛒", board=board)
+        Expense.objects.create(
+            board=board,
+            payer=self.user,
+            amount=Decimal("10.00"),
+            description="Milk",
+            split_type="equal",
+            category=category,
+        )
+        url = reverse(
+            "board-expense-categories-detail",
+            kwargs={"board_pk": str(board.id), "pk": str(category.id)},
+        )
+        response = self.client.patch(url, {"name": "Food"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        category.refresh_from_db()
+        self.assertEqual(category.name, "Food")
+
+    def test_cannot_update_global_expense_category(self):
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        global_category = ExpenseCategory.objects.create(name="Other", emoji="💰", board=None)
+        url = reverse(
+            "board-expense-categories-detail",
+            kwargs={"board_pk": str(board.id), "pk": str(global_category.id)},
+        )
+        response = self.client.patch(url, {"name": "Renamed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        global_category.refresh_from_db()
+        self.assertEqual(global_category.name, "Other")
+
+    def test_cannot_move_expense_category_to_another_board_via_update(self):
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        other_board = Board.objects.create(name="Other Board", created_by=self.user)
+        category = ExpenseCategory.objects.create(name="Groceries", emoji="🛒", board=board)
+        url = reverse(
+            "board-expense-categories-detail",
+            kwargs={"board_pk": str(board.id), "pk": str(category.id)},
+        )
+        response = self.client.patch(url, {"board": str(other_board.id)}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        category.refresh_from_db()
+        self.assertEqual(category.board_id, board.id)
+
     def test_nested_board_expenses_list(self):
         """Test retrieving expenses for a specific board via nested route."""
         board = Board.objects.create(name="Test Board", created_by=self.user)

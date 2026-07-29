@@ -3,7 +3,16 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
-from habits.models import User, Board, BoardUser, Habit, Expense, ExpenseSplit, ExpenseCategory
+from habits.models import (
+    User,
+    Board,
+    BoardUser,
+    Habit,
+    Expense,
+    ExpenseSplit,
+    ExpenseCategory,
+    PushToken,
+)
 from habits.serializers import UserSerializer, BoardSerializer, HabitSerializer, ExpenseSerializer
 from uuid import uuid4
 import random
@@ -745,3 +754,154 @@ class APITests(APITestCase):
 
         response = self.client.get(reverse("board-list"))
         self.assertEqual(response.json()["results"], [])
+
+
+class PushNotificationTests(APITestCase):
+    """Tests for push token registration and notification preferences."""
+
+    def create_random_user(self):
+        uuid = uuid4().__str__()
+        return User.objects.create_user(
+            username=uuid,
+            email=f"{uuid}@example.com",
+            password="testpassword123",
+        )
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="pushuser", email="push@example.com", password="pushpassword123"
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_register_push_token(self):
+        url = reverse("push-token-list")
+        response = self.client.post(
+            url, {"token": "ExponentPushToken[abc123]"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PushToken.objects.filter(user=self.user).count(), 1)
+
+    def test_registering_same_token_twice_upserts(self):
+        url = reverse("push-token-list")
+        self.client.post(url, {"token": "ExponentPushToken[dup]"}, format="json")
+        self.client.post(url, {"token": "ExponentPushToken[dup]"}, format="json")
+        self.assertEqual(PushToken.objects.filter(token="ExponentPushToken[dup]").count(), 1)
+
+    def test_re_registering_token_reassigns_owner(self):
+        """A token re-registered under a different account (device reinstall,
+        different user logging in) should move to the new owner."""
+        url = reverse("push-token-list")
+        self.client.post(url, {"token": "ExponentPushToken[shared]"}, format="json")
+
+        other_user = self.create_random_user()
+        other_client = APIClient()
+        other_client.force_authenticate(user=other_user)
+        other_client.post(url, {"token": "ExponentPushToken[shared]"}, format="json")
+
+        token = PushToken.objects.get(token="ExponentPushToken[shared]")
+        self.assertEqual(token.user, other_user)
+
+    def test_delete_push_token(self):
+        token = PushToken.objects.create(user=self.user, token="ExponentPushToken[todelete]")
+        url = reverse("push-token-detail", args=[str(token.id)])
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(PushToken.objects.filter(id=token.id).exists())
+
+    def test_cannot_delete_another_users_push_token(self):
+        other_user = self.create_random_user()
+        token = PushToken.objects.create(user=other_user, token="ExponentPushToken[notyours]")
+        url = reverse("push-token-detail", args=[str(token.id)])
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_app_wide_toggle_defaults_true_and_is_patchable(self):
+        self.assertTrue(self.user.push_notifications_enabled)
+        url = reverse("user-detail", args=[str(self.user.id)])
+        response = self.client.patch(url, {"push_notifications_enabled": False}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.push_notifications_enabled)
+
+    def test_board_notification_toggle(self):
+        board = Board.objects.create(name="Push Board", created_by=self.user)
+        board_user = BoardUser.objects.create(user=self.user, board=board)
+        self.assertTrue(board_user.notify_on_expense)
+
+        url = reverse("board-notifications", args=[str(board.id)])
+        response = self.client.patch(url, {"notify_on_expense": False}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.json()["notify_on_expense"])
+        board_user.refresh_from_db()
+        self.assertFalse(board_user.notify_on_expense)
+
+    def test_board_notification_toggle_requires_boolean(self):
+        board = Board.objects.create(name="Push Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        url = reverse("board-notifications", args=[str(board.id)])
+        response = self.client.patch(url, {"notify_on_expense": "not-a-bool"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_notify_expense_added_excludes_payer_and_opted_out_users(self):
+        """Only board members other than the payer, with both the per-board
+        and app-wide toggles on, and a registered token, should be notified."""
+        from unittest.mock import patch as mock_patch
+
+        from habits.notifications import notify_expense_added
+
+        board = Board.objects.create(name="Notif Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+
+        opted_in = self.create_random_user()
+        BoardUser.objects.create(user=opted_in, board=board)
+        PushToken.objects.create(user=opted_in, token="ExponentPushToken[optedin]")
+
+        opted_out_per_board = self.create_random_user()
+        BoardUser.objects.create(user=opted_out_per_board, board=board, notify_on_expense=False)
+        PushToken.objects.create(user=opted_out_per_board, token="ExponentPushToken[perboard]")
+
+        opted_out_app_wide = self.create_random_user()
+        opted_out_app_wide.push_notifications_enabled = False
+        opted_out_app_wide.save(update_fields=["push_notifications_enabled"])
+        BoardUser.objects.create(user=opted_out_app_wide, board=board)
+        PushToken.objects.create(user=opted_out_app_wide, token="ExponentPushToken[appwide]")
+
+        no_token_user = self.create_random_user()
+        BoardUser.objects.create(user=no_token_user, board=board)
+
+        expense = Expense.objects.create(
+            payer=self.user,
+            board=board,
+            amount=Decimal("10.00"),
+            description="Notif test",
+            split_type="equal",
+        )
+
+        with mock_patch("habits.notifications._executor.submit") as mock_submit:
+            notify_expense_added(expense)
+
+        self.assertEqual(mock_submit.call_count, 1)
+        messages = mock_submit.call_args.args[1]
+        tokens_notified = {m["to"] for m in messages}
+        self.assertEqual(tokens_notified, {"ExponentPushToken[optedin]"})
+
+    def test_notify_expense_added_sends_nothing_when_no_recipients(self):
+        from unittest.mock import patch as mock_patch
+
+        from habits.notifications import notify_expense_added
+
+        board = Board.objects.create(name="Solo Notif Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        expense = Expense.objects.create(
+            payer=self.user,
+            board=board,
+            amount=Decimal("5.00"),
+            description="Solo",
+            split_type="equal",
+        )
+
+        with mock_patch("habits.notifications._executor.submit") as mock_submit:
+            notify_expense_added(expense)
+
+        mock_submit.assert_not_called()

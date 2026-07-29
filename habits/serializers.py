@@ -18,7 +18,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.User
-        fields = ("id", "username", "email", "first_name", "last_name", "profile_picture")
+        fields = (
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "profile_picture",
+            "push_notifications_enabled",
+        )
 
     def get_profile_picture(self, obj):
         return obj.profile_picture.url if obj.profile_picture else None
@@ -69,6 +77,26 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class PushTokenSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.PushToken
+        fields = ("id", "token", "created_at", "last_seen_at")
+        read_only_fields = ("created_at", "last_seen_at")
+        # Uniqueness is handled via upsert in create() below, not rejected
+        # up front - a token legitimately gets re-registered on reinstall
+        # or when a different account logs in on the same device.
+        extra_kwargs = {"token": {"validators": []}}
+
+    def create(self, validated_data):
+        # A token can be re-registered (app reinstall, account switch on the
+        # same device) - upsert on the unique token rather than erroring.
+        token, _ = models.PushToken.objects.update_or_create(
+            token=validated_data["token"],
+            defaults={"user": validated_data["user"]},
+        )
+        return token
+
+
 class HabitSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Habit
@@ -112,6 +140,7 @@ class ExpenseCategoryUpdateSerializer(serializers.ModelSerializer):
 class BoardSerializer(serializers.ModelSerializer):
     expense_categories = serializers.SerializerMethodField()
     users = serializers.SerializerMethodField()
+    notify_on_expense = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Board
@@ -125,6 +154,7 @@ class BoardSerializer(serializers.ModelSerializer):
             "updated_at",
             "expense_categories",
             "join_code",
+            "notify_on_expense",
         )
         read_only_fields = ("created_by", "created_at", "updated_at", "join_code")
 
@@ -137,6 +167,14 @@ class BoardSerializer(serializers.ModelSerializer):
     def get_users(self, obj):
         board_users = obj.users.all()  # type: ignore
         return UserSerializer([bu.user for bu in board_users], many=True).data
+
+    def get_notify_on_expense(self, obj):
+        # The requesting user's own notification preference for this board.
+        request = self.context.get("request")
+        if request is None or not request.user.is_authenticated:
+            return None
+        board_user = obj.users.filter(user=request.user).first()  # type: ignore
+        return board_user.notify_on_expense if board_user else None
 
 
 class ExpenseSplitSerializer(serializers.ModelSerializer):

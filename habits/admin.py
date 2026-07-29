@@ -80,9 +80,17 @@ class ExpenseCategoryModelAdmin(admin.ModelAdmin):
     ordering = ("name",)
 
 
+class PushTokenModelAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "token", "created_at", "last_seen_at")
+    list_filter = ("created_at",)
+    search_fields = ("user__username", "token")
+    ordering = ("-last_seen_at",)
+
+
 admin.site.register(models.User, UserModelAdmin)
 admin.site.register(models.Board, BoardModelAdmin)
 admin.site.register(models.BoardUser, BoardUserModelAdmin)
 admin.site.register(models.Habit, HabitModelAdmin)
 admin.site.register(models.Expense, ExpenseModelAdmin)
 admin.site.register(models.ExpenseCategory, ExpenseCategoryModelAdmin)
+admin.site.register(models.PushToken, PushTokenModelAdmin)

@@ -3,11 +3,12 @@ import re
 
 import qrcode
 import qrcode.image.svg
+from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
-from habits import models, serializers
-from rest_framework import viewsets, permissions
+from habits import models, notifications, serializers
+from rest_framework import mixins, viewsets, permissions
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import action
@@ -183,6 +184,20 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class PushTokenViewSet(
+    mixins.CreateModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet
+):
+    queryset = models.PushToken.objects.all()
+    serializer_class = serializers.PushTokenSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
 class HabitViewSet(viewsets.ModelViewSet):
     queryset = models.Habit.objects.all()
     serializer_class = serializers.HabitSerializer
@@ -222,6 +237,19 @@ class BoardsViewSet(viewsets.ModelViewSet):
         data = self.get_serializer(board).data
         data["already_member"] = not created
         return Response(data)
+
+    @action(detail=True, methods=["patch"], url_path="notifications")
+    def notifications(self, request, pk=None):
+        board = self.get_object()
+        enabled = request.data.get("notify_on_expense")
+        if not isinstance(enabled, bool):
+            return Response(
+                {"notify_on_expense": "This field is required and must be a boolean."}, status=400
+            )
+        models.BoardUser.objects.filter(board=board, user=request.user).update(
+            notify_on_expense=enabled
+        )
+        return Response(self.get_serializer(board).data)
 
     @action(detail=True, methods=["post"], url_path="reset-code")
     def reset_code(self, request, pk=None):
@@ -286,6 +314,10 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             return serializers.ExpenseCreateUpdateSerializer
         return super().get_serializer_class()
 
+    def perform_create(self, serializer):
+        expense = serializer.save()
+        transaction.on_commit(lambda: notifications.notify_expense_added(expense))
+
 
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):
     queryset = models.ExpenseCategory.objects.all()
@@ -326,6 +358,7 @@ router.register(r"users", UserViewSet, basename="user")
 router.register(r"habits", HabitViewSet)
 router.register(r"boards", BoardsViewSet, basename="board")
 router.register(r"expenses", ExpenseViewSet)
+router.register(r"push-tokens", PushTokenViewSet, basename="push-token")
 
 # Nested route for board expenses
 router.register(r"boards/(?P<board_pk>[^/.]+)/expenses", ExpenseViewSet, basename="board-expenses")

@@ -20,6 +20,7 @@ class User(AbstractUser):
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email"]
     profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
+    push_notifications_enabled = models.BooleanField(default=True)
 
     def balance_in_board(self, board):
         paid = self.paid_expenses.filter(board=board).aggregate(total=models.Sum("amount"))["total"] or Decimal("0")  # type: ignore
@@ -98,9 +99,23 @@ class BoardUser(models.Model):
         get_user_model(), on_delete=models.CASCADE, related_name="habit_boards"
     )
     joined_at = models.DateTimeField(auto_now_add=True)
+    notify_on_expense = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.user.username} in {self.board.name}"
+
+
+class PushToken(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        get_user_model(), on_delete=models.CASCADE, related_name="push_tokens"
+    )
+    token = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s push token"
 
 
 class HabitFrequency(models.TextChoices):

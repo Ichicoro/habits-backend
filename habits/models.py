@@ -22,6 +22,10 @@ class User(AbstractUser):
     profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
     push_notifications_enabled = models.BooleanField(default=True)
 
+    @property
+    def name(self):
+        return self.first_name or self.username
+
     def balance_in_board(self, board):
         paid = self.paid_expenses.filter(board=board).aggregate(total=models.Sum("amount"))["total"] or Decimal("0")  # type: ignore
         owed = (
@@ -190,6 +194,13 @@ class Expense(models.Model):
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name="expenses")
     payer = models.ForeignKey(
         get_user_model(), on_delete=models.CASCADE, related_name="paid_expenses"
+    )
+    created_by = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        related_name="added_expenses",
+        null=True,
+        blank=True,
     )
     split_type = models.CharField(
         max_length=10, choices=ExpenseSplitType.choices, default=ExpenseSplitType.EQUAL

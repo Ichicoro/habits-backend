@@ -315,7 +315,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         return super().get_serializer_class()
 
     def perform_create(self, serializer):
-        expense = serializer.save()
+        expense = serializer.save(created_by=self.request.user)
         transaction.on_commit(lambda: notifications.notify_expense_added(expense))
 
 

@@ -66,8 +66,8 @@ class HabitModelAdmin(admin.ModelAdmin):
 
 
 class ExpenseModelAdmin(admin.ModelAdmin):
-    list_display = ("id", "payer", "amount", "description", "created_at", "category")
-    list_filter = ("payer", "created_at")
+    list_display = ("id", "payer", "created_by", "amount", "description", "created_at", "category")
+    list_filter = ("payer", "created_by", "created_at")
     search_fields = ("description",)
     ordering = ("-created_at",)
     inlines = [ExpenseSplitInline]

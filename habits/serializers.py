@@ -21,6 +21,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "username",
+            "name",
             "email",
             "first_name",
             "last_name",
@@ -210,6 +211,7 @@ class ExpenseSplitSerializer(serializers.ModelSerializer):
 
 class ExpenseSerializer(serializers.ModelSerializer):
     payer = UserSerializer(read_only=True)
+    created_by = UserSerializer(read_only=True)
     category = ExpenseCategorySerializer(read_only=True)
     splits = ExpenseSplitSerializer(many=True, read_only=True)
 
@@ -219,6 +221,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "id",
             "board",
             "payer",
+            "created_by",
             "split_type",
             "amount",
             "description",
@@ -250,7 +253,7 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Expense
         fields = "__all__"
-        read_only_fields = ("created_at", "updated_at")
+        read_only_fields = ("created_at", "updated_at", "created_by")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -25,11 +25,12 @@ def _send_expo_push(messages):
         logger.exception("Failed to send Expo push notification")
 
 
-def notify_expense_added(expense):
+def notify_expense_added(expense: models.Expense):
     board = expense.board
+    added_by = expense.created_by or expense.payer
     recipients = board.users.filter(
         notify_on_expense=True, user__push_notifications_enabled=True
-    ).exclude(user=expense.payer)
+    ).exclude(user=added_by)
     tokens = list(
         models.PushToken.objects.filter(user__in=[bu.user for bu in recipients]).values_list(
             "token", flat=True
@@ -43,8 +44,8 @@ def notify_expense_added(expense):
             "to": token,
             "title": board.name,
             "body": (
-                f"{expense.payer.username} added an expense: "
-                f"{expense.description or expense.amount}"
+                f"{added_by.name} added an expense: "
+                f"{expense.description or "Expense"} (E {expense.amount}) paid by {expense.payer.name}"
             ),
             "data": {"boardId": str(board.id), "expenseId": str(expense.id)},
         }

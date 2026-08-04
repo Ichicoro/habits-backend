@@ -1,10 +1,11 @@
 import io
 import re
+from decimal import Decimal
 
 import qrcode
 import qrcode.image.svg
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import render
 from habits import models, notifications, serializers
@@ -317,6 +318,59 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         expense = serializer.save(created_by=self.request.user)
         transaction.on_commit(lambda: notifications.notify_expense_added(expense))
+
+    @action(detail=False, methods=["get"], url_path="stats")
+    def stats(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        total = queryset.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+
+        by_payer = queryset.values("payer").annotate(total=Sum("amount")).order_by("-total")
+        paid_totals = {row["payer"]: row["total"] for row in by_payer}
+        payer_users = models.User.objects.in_bulk(paid_totals.keys())
+        by_user = [
+            {"user": serializers.UserSerializer(payer_users[payer_id]).data, "total": total}
+            for payer_id, total in sorted(paid_totals.items(), key=lambda item: -item[1])
+        ]
+
+        by_cat = queryset.values("category").annotate(total=Sum("amount")).order_by("-total")
+        category_ids = [row["category"] for row in by_cat if row["category"] is not None]
+        categories = models.ExpenseCategory.objects.in_bulk(category_ids)
+        by_category = [
+            {
+                "category": serializers.ExpenseCategorySerializer(categories[row["category"]]).data
+                if row["category"] is not None
+                else None,
+                "total": row["total"],
+            }
+            for row in by_cat
+        ]
+
+        # Net balance per user: what they paid minus what they owe across
+        # their splits, i.e. "who owes whom" - same definition as
+        # Board.get_balances(), but scoped to this (possibly date-filtered)
+        # queryset rather than every expense on the board.
+        owed_totals = {
+            row["user"]: row["total"]
+            for row in models.ExpenseSplit.objects.filter(expense__in=queryset)
+            .values("user")
+            .annotate(total=Sum("share_amount"))
+        }
+        balance_user_ids = set(paid_totals) | set(owed_totals)
+        balance_users = models.User.objects.in_bulk(balance_user_ids)
+        balances = sorted(
+            (
+                {
+                    "user": serializers.UserSerializer(balance_users[user_id]).data,
+                    "balance": paid_totals.get(user_id, Decimal("0")) - owed_totals.get(user_id, Decimal("0")),
+                }
+                for user_id in balance_user_ids
+            ),
+            key=lambda row: -row["balance"],
+        )
+
+        return Response(
+            {"total": total, "by_user": by_user, "by_category": by_category, "balances": balances}
+        )
 
 
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):

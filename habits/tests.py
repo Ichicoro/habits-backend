@@ -675,6 +675,110 @@ class APITests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_expense_stats(self):
+        """Stats endpoint returns correct totals by user and by category."""
+        board = Board.objects.create(name="Stats Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        user2 = self.create_random_user()
+        BoardUser.objects.create(user=user2, board=board)
+
+        groceries = ExpenseCategory.objects.create(name="Groceries", emoji="🛒", board=board)
+        rent = ExpenseCategory.objects.create(name="Rent", emoji="🏠", board=board)
+
+        create_url = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
+        self.client.post(
+            create_url,
+            {
+                "payer_id": str(self.user.id),
+                "amount": "100.00",
+                "description": "Groceries run",
+                "split_type": "equal",
+                "category_id": str(groceries.id),
+            },
+            format="json",
+        )
+        self.client.post(
+            create_url,
+            {
+                "payer_id": str(user2.id),
+                "amount": "50.00",
+                "description": "More groceries",
+                "split_type": "equal",
+                "category_id": str(groceries.id),
+            },
+            format="json",
+        )
+        self.client.post(
+            create_url,
+            {
+                "payer_id": str(self.user.id),
+                "amount": "200.00",
+                "description": "Rent",
+                "split_type": "equal",
+                "category_id": str(rent.id),
+            },
+            format="json",
+        )
+        self.client.post(
+            create_url,
+            {
+                "payer_id": str(self.user.id),
+                "amount": "10.00",
+                "description": "Misc, no category",
+                "split_type": "equal",
+            },
+            format="json",
+        )
+
+        url = reverse("board-expenses-stats", kwargs={"board_pk": str(board.id)})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        data = response.json()
+
+        self.assertEqual(Decimal(data["total"]), Decimal("360.00"))
+
+        by_user = {row["user"]["id"]: Decimal(row["total"]) for row in data["by_user"]}
+        self.assertEqual(by_user[str(self.user.id)], Decimal("310.00"))
+        self.assertEqual(by_user[str(user2.id)], Decimal("50.00"))
+
+        by_category = {
+            row["category"]["id"] if row["category"] else None: Decimal(row["total"])
+            for row in data["by_category"]
+        }
+        self.assertEqual(by_category[str(groceries.id)], Decimal("150.00"))
+        self.assertEqual(by_category[str(rent.id)], Decimal("200.00"))
+        self.assertEqual(by_category[None], Decimal("10.00"))
+
+        # Equal splits between the two board members on every expense: each
+        # owes half of the 360.00 total (180.00), regardless of who paid.
+        balances = {row["user"]["id"]: Decimal(row["balance"]) for row in data["balances"]}
+        self.assertEqual(balances[str(self.user.id)], Decimal("130.00"))
+        self.assertEqual(balances[str(user2.id)], Decimal("-130.00"))
+
+    def test_expense_stats_permission(self):
+        """Users who aren't board members can't fetch its stats."""
+        other_user = self.create_random_user()
+        other_board = Board.objects.create(name="Other Board", created_by=other_user)
+        BoardUser.objects.create(user=other_user, board=other_board)
+
+        url = reverse("board-expenses-stats", kwargs={"board_pk": str(other_board.id)})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_expense_stats_empty_board(self):
+        """A board with no expenses returns zeroed-out stats, not an error."""
+        board = Board.objects.create(name="Empty Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+
+        url = reverse("board-expenses-stats", kwargs={"board_pk": str(board.id)})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        data = response.json()
+        self.assertEqual(Decimal(data["total"]), Decimal("0"))
+        self.assertEqual(data["by_user"], [])
+        self.assertEqual(data["by_category"], [])
+        self.assertEqual(data["balances"], [])
+
     def test_leave_board_with_other_members(self):
         """A user can leave a board as long as another member remains."""
         board = Board.objects.create(name="Shared Board", created_by=self.user)

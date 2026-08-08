@@ -37,6 +37,9 @@ CSRF_TRUSTED_ORIGINS = [
     origin for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin
 ]
 
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "Echoes <noreply@echoes.zelda.sh>")
+
 SENTRY_DSN = os.environ.get("SENTRY_DSN")
 if SENTRY_DSN:
     sentry_sdk.init(
@@ -207,6 +210,8 @@ REST_FRAMEWORK = {
         "login": "10/hour",
         "join": "15/hour",
         "check-username": "30/minute",
+        "resend-verification": "5/hour",
+        "password-reset": "5/hour",
     },
 }
 

@@ -1,4 +1,5 @@
 import secrets
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import AbstractUser
@@ -21,6 +22,7 @@ class User(AbstractUser):
     REQUIRED_FIELDS = ["email"]
     profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
     push_notifications_enabled = models.BooleanField(default=True)
+    email_verified = models.BooleanField(default=False)
 
     @property
     def name(self):
@@ -35,6 +37,55 @@ class User(AbstractUser):
             or Decimal("0")
         )
         return paid - owed
+
+
+def generate_token():
+    return secrets.token_urlsafe(32)
+
+
+class EmailVerificationToken(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        get_user_model(), on_delete=models.CASCADE, related_name="email_verification_tokens"
+    )
+    token = models.CharField(max_length=64, unique=True, default=generate_token, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = now() + timedelta(hours=24)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_expired(self):
+        return now() >= self.expires_at
+
+    def __str__(self):
+        return f"Email verification token for {self.user.username}"
+
+
+class PasswordResetToken(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        get_user_model(), on_delete=models.CASCADE, related_name="password_reset_tokens"
+    )
+    token = models.CharField(max_length=64, unique=True, default=generate_token, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = now() + timedelta(hours=1)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_valid(self):
+        return self.used_at is None and now() < self.expires_at
+
+    def __str__(self):
+        return f"Password reset token for {self.user.username}"
 
 
 def generate_join_code():

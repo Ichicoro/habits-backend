@@ -4,11 +4,14 @@ from decimal import Decimal
 
 import qrcode
 import qrcode.image.svg
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import render
-from habits import models, notifications, serializers
+from django.utils.timezone import now
+from habits import emails, models, notifications, serializers
 from rest_framework import mixins, viewsets, permissions
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
@@ -84,6 +87,90 @@ def android_asset_links(request):
     )
 
 
+def _send_verification_email(request, user):
+    token = models.EmailVerificationToken.objects.create(user=user)
+    verify_url = request.build_absolute_uri(f"/verify-email?token={token.token}")
+    emails.send_verification_email(user, verify_url)
+
+
+def verify_email_page(request):
+    """Landing page for the link in the "verify your email" email."""
+    token = request.GET.get("token", "")
+    verification_token = (
+        models.EmailVerificationToken.objects.filter(token=token).select_related("user").first()
+        if token
+        else None
+    )
+
+    if verification_token is None:
+        status = "invalid"
+    elif verification_token.user.email_verified:
+        status = "already"
+    elif verification_token.is_expired:
+        status = "expired"
+    else:
+        verification_token.user.email_verified = True
+        verification_token.user.save(update_fields=["email_verified"])
+        status = "success"
+
+    return render(request, "verify_email.html", {"status": status})
+
+
+def reset_password_page(request):
+    """Handles both steps of password reset as a single web page: entering
+    an email to request a reset link, and (once that link is followed)
+    entering a new password. Deliberately not part of the app - a reset
+    flow needs to work even when the user is signed out and has forgotten
+    their credentials, so it can't depend on an authenticated app session."""
+    token = request.GET.get("token") or request.POST.get("token", "")
+    reset_token = None
+    if token:
+        reset_token = models.PasswordResetToken.objects.filter(token=token).select_related("user").first()
+    token_valid = bool(reset_token and reset_token.is_valid)
+
+    error = None
+    sent = False
+    success = False
+
+    if request.method == "POST":
+        if token:
+            if not token_valid:
+                error = "This reset link is invalid or has expired."
+            else:
+                password = request.POST.get("password", "")
+                password_confirm = request.POST.get("password_confirm", "")
+                if password != password_confirm:
+                    error = "Passwords don't match."
+                else:
+                    try:
+                        validate_password(password, user=reset_token.user)
+                    except DjangoValidationError as exc:
+                        error = " ".join(exc.messages)
+                    else:
+                        reset_token.user.set_password(password)
+                        reset_token.user.save(update_fields=["password"])
+                        reset_token.used_at = now()
+                        reset_token.save(update_fields=["used_at"])
+                        success = True
+        else:
+            email = request.POST.get("email", "").strip()
+            if email:
+                user = models.User.objects.filter(email__iexact=email).first()
+                if user:
+                    new_token = models.PasswordResetToken.objects.create(user=user)
+                    reset_url = request.build_absolute_uri(f"/reset-password?token={new_token.token}")
+                    emails.send_password_reset_email(user, reset_url)
+                # Always report success, whether or not that email is
+                # registered, so this can't be used to enumerate accounts.
+                sent = True
+
+    return render(
+        request,
+        "reset_password.html",
+        {"token": token, "token_valid": token_valid, "error": error, "sent": sent, "success": success},
+    )
+
+
 class ThrottledObtainAuthToken(ObtainAuthToken):
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -101,6 +188,7 @@ class RegisterView(CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         token, _ = Token.objects.get_or_create(user=user)
+        transaction.on_commit(lambda: _send_verification_email(request, user))
         return Response({"token": token.key}, status=201)
 
 
@@ -114,6 +202,9 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_throttles(self):
         if self.action in ("check_username", "check_email"):
             self.throttle_scope = "check-username"
+            return [ScopedRateThrottle()]
+        if self.action == "resend_verification":
+            self.throttle_scope = "resend-verification"
             return [ScopedRateThrottle()]
         return super().get_throttles()
 
@@ -133,6 +224,18 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_me(self, request, *args, **kwargs):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="resend-verification",
+        url_name="resend-verification",
+    )
+    def resend_verification(self, request, *args, **kwargs):
+        if request.user.email_verified:
+            return Response({"detail": "Email is already verified."}, status=400)
+        _send_verification_email(request, request.user)
+        return Response(status=204)
 
     @action(
         detail=False,

@@ -27,8 +27,16 @@ class BoardUserBoardInline(admin.TabularInline):
 
 
 class UserModelAdmin(admin.ModelAdmin):
-    list_display = ("username", "email", "is_active", "is_staff", "is_superuser", "date_joined")
-    list_filter = ("is_active", "is_staff", "is_superuser", "date_joined")
+    list_display = (
+        "username",
+        "email",
+        "email_verified",
+        "is_active",
+        "is_staff",
+        "is_superuser",
+        "date_joined",
+    )
+    list_filter = ("is_active", "is_staff", "is_superuser", "email_verified", "date_joined")
     search_fields = ("username", "email")
     ordering = ("-date_joined",)
     inlines = [BoardUserInline]
@@ -87,7 +95,21 @@ class PushTokenModelAdmin(admin.ModelAdmin):
     ordering = ("-last_seen_at",)
 
 
+class EmailVerificationTokenModelAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "created_at", "expires_at")
+    search_fields = ("user__username", "user__email")
+    ordering = ("-created_at",)
+
+
+class PasswordResetTokenModelAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "created_at", "expires_at", "used_at")
+    search_fields = ("user__username", "user__email")
+    ordering = ("-created_at",)
+
+
 admin.site.register(models.User, UserModelAdmin)
+admin.site.register(models.EmailVerificationToken, EmailVerificationTokenModelAdmin)
+admin.site.register(models.PasswordResetToken, PasswordResetTokenModelAdmin)
 admin.site.register(models.Board, BoardModelAdmin)
 admin.site.register(models.BoardUser, BoardUserModelAdmin)
 admin.site.register(models.Habit, HabitModelAdmin)

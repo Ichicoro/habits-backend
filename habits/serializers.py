@@ -27,7 +27,9 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "profile_picture",
             "push_notifications_enabled",
+            "email_verified",
         )
+        read_only_fields = ("email_verified",)
 
     def get_profile_picture(self, obj):
         return obj.profile_picture.url if obj.profile_picture else None

@@ -27,7 +27,9 @@ from habits.views import (
     apple_app_site_association,
     join_page,
     landing_page,
+    reset_password_page,
     router,
+    verify_email_page,
 )
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
@@ -63,6 +65,8 @@ urlpatterns = [
         name="data-deletion",
     ),
     path("join", join_page),
+    path("verify-email", verify_email_page, name="verify-email"),
+    path("reset-password", reset_password_page, name="reset-password"),
     # Universal Links / App Links verification files - must be served at
     # exactly these paths, unredirected, for iOS/Android to trust /join.
     path(".well-known/apple-app-site-association", apple_app_site_association),

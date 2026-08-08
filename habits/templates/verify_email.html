@@ -1,0 +1,84 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
+<meta name="darkreader-lock">
+<title>Verify email — Echoes</title>
+<link rel="preload" href="{% static 'join/fonts/SpaceGrotesk-Variable.ttf' %}" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="{% static 'join/fonts/Basteleur-Bold.otf' %}" as="font" type="font/otf" crossorigin>
+<link rel="stylesheet" href="{% static 'theme.css' %}">
+
+<style>
+  @font-face {
+    font-family: "Space Grotesk";
+    src: url("{% static 'join/fonts/SpaceGrotesk-Variable.ttf' %}") format("truetype");
+    font-weight: 300 700;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Basteleur-Bold";
+    src: url("{% static 'join/fonts/Basteleur-Bold.otf' %}") format("opentype");
+    font-weight: 700;
+    font-display: swap;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--background);
+    color: var(--text);
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  main {
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+  }
+  .wordmark {
+    font-family: "Basteleur-Bold", Georgia, "Times New Roman", Times, serif;
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  h1 {
+    font-family: "Basteleur-Bold", Georgia, "Times New Roman", Times, serif;
+    font-weight: 700;
+    font-size: 2rem;
+    line-height: 1.2;
+    margin: 0 0 0.5rem;
+  }
+  p.subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin: 0 0 1rem;
+  }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="wordmark">Echoes</div>
+
+  {% if status == "success" %}
+    <h1>Email verified</h1>
+    <p class="subtitle">Your email address is confirmed. You're all set — head back to the app.</p>
+  {% elif status == "already" %}
+    <h1>Already verified</h1>
+    <p class="subtitle">This email address was already confirmed.</p>
+  {% elif status == "expired" %}
+    <h1>Link expired</h1>
+    <p class="subtitle">This verification link has expired. Request a new one from the app.</p>
+  {% else %}
+    <h1>Invalid link</h1>
+    <p class="subtitle">This verification link isn't valid. Request a new one from the app.</p>
+  {% endif %}
+</main>
+
+</body>
+</html>

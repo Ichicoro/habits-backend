@@ -2,6 +2,7 @@ import secrets
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.contrib.auth import get_user_model
@@ -27,6 +28,12 @@ class User(AbstractUser):
     @property
     def name(self):
         return self.first_name or self.username
+
+    @property
+    def is_email_verified(self):
+        if not settings.RESEND_API_KEY:
+            return True
+        return self.email_verified
 
     def balance_in_board(self, board):
         paid = self.paid_expenses.filter(board=board).aggregate(total=models.Sum("amount"))["total"] or Decimal("0")  # type: ignore

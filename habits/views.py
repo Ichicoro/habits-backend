@@ -232,7 +232,7 @@ class UserViewSet(viewsets.ModelViewSet):
         url_name="resend-verification",
     )
     def resend_verification(self, request, *args, **kwargs):
-        if request.user.email_verified:
+        if request.user.is_email_verified:
             return Response({"detail": "Email is already verified."}, status=400)
         _send_verification_email(request, request.user)
         return Response(status=204)

@@ -15,6 +15,7 @@ class UserSerializer(serializers.ModelSerializer):
     # already resolves relative media paths against its own known-good API
     # base URL, so we hand back the raw relative path instead.
     profile_picture = serializers.SerializerMethodField()
+    email_verified = serializers.BooleanField(source="is_email_verified", read_only=True)
 
     class Meta:
         model = models.User
@@ -29,7 +30,6 @@ class UserSerializer(serializers.ModelSerializer):
             "push_notifications_enabled",
             "email_verified",
         )
-        read_only_fields = ("email_verified",)
 
     def get_profile_picture(self, obj):
         return obj.profile_picture.url if obj.profile_picture else None

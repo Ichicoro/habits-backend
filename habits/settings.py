@@ -57,6 +57,13 @@ if SENTRY_DSN:
 # Application definition
 
 INSTALLED_APPS = [
+    # Must precede django.contrib.staticfiles so its ASGI-capable `runserver`
+    # wins - the stock one is WSGI-only and can't serve websockets locally.
+    # This also shadows whitenoise.runserver_nostatic's override below, so
+    # `runserver` serves static files again in dev. Harmless; production
+    # static serving goes through the whitenoise middleware either way.
+    "daphne",
+    "channels",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -109,6 +116,35 @@ STORAGES = {
 }
 
 WSGI_APPLICATION = "habits.wsgi.application"
+ASGI_APPLICATION = "habits.asgi.application"
+
+# Kill switch: when off, the websocket route is not mounted and no broadcasts
+# are attempted. Clients tolerate a missing socket by design (they fall back to
+# refetch-on-mount and pull-to-refresh), so this is a safe production toggle.
+REALTIME_ENABLED = os.environ.get("REALTIME_ENABLED", "1") not in ("0", "false", "False", "")
+
+# In production gunicorn runs several worker processes, so a broadcast raised in
+# the worker handling the write has to reach sockets parked on *other* workers -
+# hence Redis. Locally `runserver` is a single process, so the in-memory layer is
+# not a degraded fallback but exactly equivalent. Absent REDIS_URL means local.
+REDIS_URL = os.environ.get("REDIS_URL", "")
+
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            # Broadcasts are sent inline on the request thread (see
+            # habits.realtime for why), so a hung Redis must not be able to
+            # stall a write indefinitely - bound it rather than block.
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+                "symmetric_encryption_keys": None,
+                "expiry": 10,
+            },
+        }
+    }
+else:
+    CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 
 # Database

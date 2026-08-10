@@ -50,6 +50,16 @@ class BoardConsumer(AsyncJsonWebsocketConsumer):
         self.user = user
         self.board_ids = set()
         await self.accept()
+        # Deliberately not fail-open, unlike habits.realtime. If group_add can't
+        # reach the channel layer the socket is closed rather than kept alive,
+        # because an accepted-but-unsubscribed socket is worse than none: the
+        # client would report itself Live while silently receiving nothing.
+        # Closing makes it back off, retry, and full-refetch on reconnect.
+        #
+        # In practice this fires for the first connect or two after a Redis
+        # restart, when a worker's pool still holds connections the server has
+        # already dropped ("Connection closed by server"). Each worker flushes
+        # its own stale pool that way and the next attempt succeeds.
         await self.channel_layer.group_add(user_group(user.id), self.channel_name)
         await self._sync_board_groups()
 

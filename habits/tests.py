@@ -1,6 +1,14 @@
 from decimal import Decimal
-from django.test import TestCase
+from unittest import mock
+
+from asgiref.sync import sync_to_async
+from channels.testing import WebsocketCommunicator
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
+from rest_framework.authtoken.models import Token
+
+from habits import realtime
+from habits.asgi import application
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
 from habits.models import (
@@ -1009,3 +1017,142 @@ class PushNotificationTests(APITestCase):
             notify_expense_added(expense)
 
         mock_submit.assert_not_called()
+
+
+# Realtime websocket nudges.
+#
+# These use TransactionTestCase rather than TestCase because broadcasts are
+# deferred with transaction.on_commit, which never fires inside the transaction
+# TestCase wraps each test in - the nudges would silently never be sent.
+#
+# The channel layer here is the in-memory one (no REDIS_URL in tests). That
+# covers routing, auth, group membership and fan-out; what it cannot cover is
+# delivery *between* worker processes, which is the one thing Redis exists for.
+
+
+def _ws(token_key):
+    return WebsocketCommunicator(application, f"/ws/boards/?token={token_key}")
+
+
+class RealtimeConsumerTests(TransactionTestCase):
+    """Who receives nudges over the websocket, and who is refused a socket."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="pw")
+        self.bob = User.objects.create_user(username="bob", password="pw")
+        self.alice_token = Token.objects.create(user=self.alice)
+        self.bob_token = Token.objects.create(user=self.bob)
+        self.board = Board.objects.create(name="Home", created_by=self.alice)
+        BoardUser.objects.create(board=self.board, user=self.alice)
+
+    async def _add_expense(self, amount="10.00"):
+        return await sync_to_async(Expense.objects.create)(
+            board=self.board, payer=self.alice, amount=amount, description="coffee"
+        )
+
+    async def test_member_receives_expense_nudge(self):
+        comm = _ws(self.alice_token.key)
+        connected, _ = await comm.connect()
+        assert connected
+
+        await self._add_expense()
+
+        message = await comm.receive_json_from(timeout=5)
+        assert message["type"] == "board.changed"
+        assert message["board_id"] == str(self.board.id)
+        assert message["kind"] == "expense"
+        await comm.disconnect()
+
+    async def test_non_member_receives_nothing(self):
+        """A socket must only see boards its user actually belongs to."""
+        comm = _ws(self.bob_token.key)
+        connected, _ = await comm.connect()
+        assert connected
+
+        await self._add_expense()
+
+        assert await comm.receive_nothing(timeout=1)
+        await comm.disconnect()
+
+    async def test_invalid_token_is_refused(self):
+        comm = _ws("not-a-real-token")
+        connected, code = await comm.connect()
+        assert not connected
+        assert code == 4001
+
+    async def test_missing_token_is_refused(self):
+        comm = WebsocketCommunicator(application, "/ws/boards/")
+        connected, code = await comm.connect()
+        assert not connected
+        assert code == 4001
+
+    async def test_ping_is_answered(self):
+        """The client heartbeat: without a reply it assumes a dead link."""
+        comm = _ws(self.alice_token.key)
+        await comm.connect()
+        await comm.send_json_to({"action": "ping"})
+        assert (await comm.receive_json_from(timeout=5))["type"] == "pong"
+        await comm.disconnect()
+
+    async def test_joining_a_board_subscribes_an_open_socket(self):
+        """Being added to a board must go live without needing a reconnect."""
+        comm = _ws(self.bob_token.key)
+        await comm.connect()
+
+        await sync_to_async(BoardUser.objects.create)(board=self.board, user=self.bob)
+        # The membership refresh reaches Bob's per-user group and makes the
+        # consumer re-resolve which board groups it belongs to.
+        assert (await comm.receive_json_from(timeout=5))["kind"] == "members"
+
+        await self._add_expense(amount="4.00")
+        message = await comm.receive_json_from(timeout=5)
+        assert message["board_id"] == str(self.board.id)
+        assert message["kind"] == "expense"
+        await comm.disconnect()
+
+
+class RealtimeFailOpenTests(TransactionTestCase):
+    """A degraded channel layer must never affect the REST API."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="carol", password="pw")
+        self.board = Board.objects.create(name="Flat", created_by=self.user)
+        BoardUser.objects.create(board=self.board, user=self.user)
+
+    def test_write_succeeds_when_channel_layer_is_unavailable(self):
+        """The one that matters: broadcasts run in an on_commit hook, so an
+        exception there would surface as a 500 on an *already committed* write -
+        the user retries and duplicates the expense."""
+        # The logger is patched rather than left to run: Sentry's logging
+        # integration would otherwise ship these deliberate failures to the real
+        # project on every test run. Asserting on it also pins down that the
+        # failure is *logged* and not silently swallowed.
+        with mock.patch.object(realtime.logger, "exception") as logged:
+            with mock.patch(
+                "habits.realtime.get_channel_layer",
+                side_effect=ConnectionError("redis is down"),
+            ):
+                expense = Expense.objects.create(
+                    board=self.board, payer=self.user, amount=Decimal("5.00")
+                )
+        assert Expense.objects.filter(pk=expense.pk).exists()
+        assert logged.called, "a failed broadcast must still be logged"
+
+    def test_global_category_does_not_broadcast(self):
+        """Seeded default categories belong to no board and so have nobody to
+        notify; broadcasting them would be a send to a group that can't exist."""
+        with mock.patch("habits.realtime._send") as send:
+            ExpenseCategory.objects.create(name="Global", emoji="🌍", board=None)
+        send.assert_not_called()
+
+    def test_board_category_does_broadcast(self):
+        with mock.patch("habits.realtime._send") as send:
+            ExpenseCategory.objects.create(name="Food", emoji="🍕", board=self.board)
+        assert send.called
+
+    def test_realtime_disabled_skips_broadcasts(self):
+        """The production kill switch."""
+        with mock.patch("habits.realtime._send") as send:
+            with self.settings(REALTIME_ENABLED=False):
+                Expense.objects.create(board=self.board, payer=self.user, amount=Decimal("3.00"))
+        send.assert_not_called()

@@ -75,9 +75,7 @@ def board_user_changed(sender, instance, created, update_fields=None, **kwargs):
         return
     _nudge(instance.board_id, "members")
     if created:
-        transaction.on_commit(
-            lambda: realtime.broadcast_membership_refresh(instance.user_id)
-        )
+        transaction.on_commit(lambda: realtime.broadcast_membership_refresh(instance.user_id))
 
 
 @receiver(signals.post_delete, sender=models.BoardUser)

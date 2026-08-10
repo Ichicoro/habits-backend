@@ -14,11 +14,29 @@ services:
    networks:
      - habits
 
+ redis:
+   image: redis:7-alpine
+   # Pure message bus for websocket fan-out, not a datastore: with several
+   # gunicorn workers, the process handling a write has to reach sockets parked
+   # on the others. Nothing here needs persisting - a client that reconnects
+   # refetches everything anyway - so there is no volume and losing it on
+   # restart is harmless.
+   command: ["redis-server", "--save", "", "--appendonly", "no"]
+   # Deliberately not published to the host: only habits-web talks to it.
+   networks:
+     - habits
+   healthcheck:
+     test: ["CMD", "redis-cli", "ping"]
+     interval: 10s
+     timeout: 3s
+     retries: 5
+
  habits-web:
    build: .
    container_name: habits-docker
    depends_on:
      - db
+     - redis
    networks:
      - habits
    environment:
@@ -34,6 +52,10 @@ services:
      DATABASE_HOST: db
      DATABASE_PORT: 5432
      SENTRY_DSN: ${SENTRY_DSN}
+     # Presence of REDIS_URL is what switches the channel layer off the
+     # in-memory backend, which only works in a single process.
+     REDIS_URL: redis://redis:6379/0
+     REALTIME_ENABLED: ${REALTIME_ENABLED:-1}
    env_file:
      - .env
 

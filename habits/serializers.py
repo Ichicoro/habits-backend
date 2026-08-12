@@ -260,10 +260,32 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         split_type = self.initial_data.get("split_type") if self.initial_data else None  # type: ignore
-        if split_type == models.ExpenseSplitType.EQUAL:
+        # Equal splits derive every share from the board; percentage splits
+        # derive them from the percentage. Neither needs share_amount sent in.
+        if split_type in (models.ExpenseSplitType.EQUAL, models.ExpenseSplitType.PERCENTAGE):
             self.fields["splits"] = ExpenseSplitSerializer(
                 many=True, required=False, requires_data=False
             )
+
+    def reconcile_to_total(self, shares, total):
+        """Floor each share to the cent and hand the leftover pennies out, one at
+        a time, to the shares that lost the most to rounding. Guarantees the
+        shares sum to exactly `total` (the sum of the raw shares must already
+        match `total` to within the caller's tolerance)."""
+        cent = Decimal("0.01")
+        floored = [s.quantize(cent, rounding=ROUND_DOWN) for s in shares]
+        leftover = int((total - sum(floored)) / cent)
+
+        # Largest-remainder: biggest rounding loss gets the first spare penny.
+        # A negative leftover means the raw shares overshot the total (allowed
+        # by the caller's tolerance), so we claw pennies back the other way.
+        order = sorted(range(len(shares)), key=lambda i: shares[i] - floored[i], reverse=True)
+        if leftover < 0:
+            order.reverse()
+        step = cent if leftover > 0 else -cent
+        for i in order[: abs(leftover)]:
+            floored[i] += step
+        return floored
 
     def handle_equal_splits(self, expense, splits_data):
         if not splits_data:
@@ -280,14 +302,12 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
         if len(user_ids) != len(set(user_ids)):
             raise serializers.ValidationError("Each user can appear only once in splits.")
 
-        # Split to the cent, then hand any leftover pennies (from rounding)
-        # to the first user so shares always sum exactly to expense.amount.
-        cent = Decimal("0.01")
-        share = (expense.amount / len(users)).quantize(cent, rounding=ROUND_DOWN)
-        remainder = expense.amount - (share * len(users))
+        # Split to the cent, then spread any leftover pennies (from rounding)
+        # so shares always sum exactly to expense.amount.
+        share = expense.amount / len(users)
+        shares = self.reconcile_to_total([share] * len(users), expense.amount)
 
-        for i, user in enumerate(users):
-            user_share = share + remainder if i == 0 else share
+        for user, user_share in zip(users, shares):
             models.ExpenseSplit.objects.update_or_create(
                 expense=expense,
                 user=user,
@@ -298,6 +318,9 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
         if not splits_data:
             raise serializers.ValidationError("Splits data is required for percentage split type")
 
+        if any(sd.get("percentage") is None for sd in splits_data):
+            raise serializers.ValidationError("Every split needs a percentage.")
+
         total_percentage = sum(sd["percentage"] for sd in splits_data)
         if abs(total_percentage - Decimal("100")) > Decimal("0.01"):
             raise serializers.ValidationError("Total split percentage must equal 100%")
@@ -307,12 +330,17 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
         if len(user_ids) != len(set(user_ids)):
             raise serializers.ValidationError("Each user can appear only once in splits.")
 
-        for sd in splits_data:
-            user = sd["user"]
-            share_amount = (sd["percentage"] / 100) * expense.amount
+        # Percentages that only *nearly* total 100 (33.33 x3) would otherwise
+        # leave the shares a cent short of the expense, so reconcile them.
+        shares = self.reconcile_to_total(
+            [(sd["percentage"] / 100) * expense.amount for sd in splits_data],
+            expense.amount,
+        )
+
+        for sd, share_amount in zip(splits_data, shares):
             models.ExpenseSplit.objects.update_or_create(
                 expense=expense,
-                user=user,
+                user=sd["user"],
                 defaults={
                     "share_amount": share_amount,
                     "percentage": sd["percentage"],
@@ -332,13 +360,16 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
         if len(user_ids) != len(set(user_ids)):
             raise serializers.ValidationError("Each user can appear only once in splits.")
 
-        for sd in splits_data:
-            user = sd["user"]
+        shares = self.reconcile_to_total(
+            [sd["share_amount"] for sd in splits_data], expense.amount
+        )
+
+        for sd, share_amount in zip(splits_data, shares):
             models.ExpenseSplit.objects.update_or_create(
                 expense=expense,
-                user=user,
+                user=sd["user"],
                 defaults={
-                    "share_amount": sd["share_amount"],
+                    "share_amount": share_amount,
                     "percentage": sd.get("percentage"),
                 },
             )

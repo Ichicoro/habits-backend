@@ -298,6 +298,34 @@ class APITests(APITestCase):
         assert expense["split_type"] == "equal"
         assert len(expense["splits"]) == 2
 
+    def test_three_way_percentage_split_sums_to_amount(self):
+        """33.33% x3 totals 99.99%, but the shares must still cover the expense."""
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        user2 = self.create_random_user()
+        user3 = self.create_random_user()
+        BoardUser.objects.create(user=user2, board=board)
+        BoardUser.objects.create(user=user3, board=board)
+
+        url = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
+        for amount in ("100.00", "77.77", "0.05"):
+            data = {
+                "payer_id": str(self.user.id),
+                "amount": amount,
+                "description": f"Thirds of {amount}",
+                "split_type": "percentage",
+                "splits": [
+                    {"user": str(u.id), "percentage": "33.33"}
+                    for u in (self.user, user2, user3)
+                ],
+            }
+            response = self.client.post(url, data, format="json")
+            assert response.status_code == status.HTTP_201_CREATED, response.content
+            splits = response.json()["splits"]
+            assert len(splits) == 3
+            total = sum(Decimal(str(s["share_amount"])) for s in splits)
+            assert total == Decimal(amount), f"{amount}: shares sum to {total}"
+
     def test_user_various_expenses(self):
         """Test creating and updating various types of expenses via API."""
         board = Board.objects.create(name="Test Board", created_by=self.user)

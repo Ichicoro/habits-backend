@@ -308,7 +308,9 @@ class APITests(APITestCase):
         BoardUser.objects.create(user=user3, board=board)
 
         url = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
-        for amount in ("100.00", "77.77", "0.05"):
+        # 284.20 is the interesting one: it floors to 94.72 each and leaves
+        # four pennies to spread across three people.
+        for amount in ("100.00", "77.77", "0.05", "284.20", "999.99"):
             data = {
                 "payer_id": str(self.user.id),
                 "amount": amount,
@@ -325,6 +327,38 @@ class APITests(APITestCase):
             assert len(splits) == 3
             total = sum(Decimal(str(s["share_amount"])) for s in splits)
             assert total == Decimal(amount), f"{amount}: shares sum to {total}"
+
+    def test_payer_absorbs_the_rounding_cent(self):
+        """Leftover pennies land on whoever paid, not on whoever sorts first."""
+        board = Board.objects.create(name="Test Board", created_by=self.user)
+        BoardUser.objects.create(user=self.user, board=board)
+        user2 = self.create_random_user()
+        user3 = self.create_random_user()
+        BoardUser.objects.create(user=user2, board=board)
+        BoardUser.objects.create(user=user3, board=board)
+        url = reverse("board-expenses-list", kwargs={"board_pk": str(board.id)})
+
+        # Each user pays in turn; the extra cent should follow the payer around
+        # rather than always sticking to the first split in the list.
+        for payer in (self.user, user2, user3):
+            for split_type, extra in (("equal", {}), ("percentage", {"percentage": "33.33"})):
+                data = {
+                    "payer_id": str(payer.id),
+                    "amount": "100.00",
+                    "description": f"{split_type} paid by {payer.username}",
+                    "split_type": split_type,
+                    "splits": [
+                        {"user": str(u.id), **extra} for u in (self.user, user2, user3)
+                    ],
+                }
+                response = self.client.post(url, data, format="json")
+                assert response.status_code == status.HTTP_201_CREATED, response.content
+                splits = response.json()["splits"]
+                shares = {s["user"]["id"]: Decimal(str(s["share_amount"])) for s in splits}
+                assert sum(shares.values()) == Decimal("100.00")
+                assert shares[str(payer.id)] == Decimal("33.34"), (
+                    f"{split_type}: payer got {shares[str(payer.id)]}, not the extra cent"
+                )
 
     def test_user_various_expenses(self):
         """Test creating and updating various types of expenses via API."""

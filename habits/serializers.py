@@ -267,25 +267,43 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
                 many=True, required=False, requires_data=False
             )
 
-    def reconcile_to_total(self, shares, total):
-        """Floor each share to the cent and hand the leftover pennies out, one at
-        a time, to the shares that lost the most to rounding. Guarantees the
-        shares sum to exactly `total` (the sum of the raw shares must already
-        match `total` to within the caller's tolerance)."""
+    def reconcile_to_total(self, shares, total, priority_index=None):
+        """Floor each share to the cent and hand the leftover pennies out,
+        starting with `priority_index` (the payer) and then by who lost the
+        most to rounding. Guarantees the shares sum to exactly `total` (the sum
+        of the raw shares must already match `total` to within the caller's
+        tolerance)."""
         cent = Decimal("0.01")
         floored = [s.quantize(cent, rounding=ROUND_DOWN) for s in shares]
         leftover = int((total - sum(floored)) / cent)
+        if not floored or not leftover:
+            return floored
 
-        # Largest-remainder: biggest rounding loss gets the first spare penny.
-        # A negative leftover means the raw shares overshot the total (allowed
-        # by the caller's tolerance), so we claw pennies back the other way.
-        order = sorted(range(len(shares)), key=lambda i: shares[i] - floored[i], reverse=True)
-        if leftover < 0:
-            order.reverse()
-        step = cent if leftover > 0 else -cent
-        for i in order[: abs(leftover)]:
-            floored[i] += step
+        # The payer absorbs the rounding: they take the spare penny, and on a
+        # negative leftover (raw shares overshooting the total, which the
+        # caller's tolerance allows) they're the one who gives it back. Ties
+        # among everyone else go by largest remaining fraction.
+        #
+        # There can be more leftover pennies than there are shares: 33.33% x3
+        # of 284.20 floors to 94.72 each and leaves 4 pennies for 3 people,
+        # because the percentages only cover 99.99% to begin with. So everyone
+        # takes a full round first and the rest goes by this order.
+        sign = 1 if leftover > 0 else -1
+        each, remaining = divmod(abs(leftover), len(floored))
+        order = sorted(
+            range(len(shares)),
+            key=lambda i: (i == priority_index, (shares[i] - floored[i]) * sign),
+            reverse=True,
+        )
+        for rank, i in enumerate(order):
+            pennies = each + (1 if rank < remaining else 0)
+            floored[i] += sign * cent * pennies
         return floored
+
+    def payer_index(self, expense, users):
+        """Where the payer sits in `users`, or None if they aren't splitting
+        this expense (someone can pay for a group they're not part of)."""
+        return next((i for i, u in enumerate(users) if u.id == expense.payer_id), None)
 
     def handle_equal_splits(self, expense, splits_data):
         if not splits_data:
@@ -305,7 +323,9 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
         # Split to the cent, then spread any leftover pennies (from rounding)
         # so shares always sum exactly to expense.amount.
         share = expense.amount / len(users)
-        shares = self.reconcile_to_total([share] * len(users), expense.amount)
+        shares = self.reconcile_to_total(
+            [share] * len(users), expense.amount, self.payer_index(expense, users)
+        )
 
         for user, user_share in zip(users, shares):
             models.ExpenseSplit.objects.update_or_create(
@@ -335,6 +355,7 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
         shares = self.reconcile_to_total(
             [(sd["percentage"] / 100) * expense.amount for sd in splits_data],
             expense.amount,
+            self.payer_index(expense, users),
         )
 
         for sd, share_amount in zip(splits_data, shares):
@@ -361,7 +382,9 @@ class ExpenseCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Each user can appear only once in splits.")
 
         shares = self.reconcile_to_total(
-            [sd["share_amount"] for sd in splits_data], expense.amount
+            [sd["share_amount"] for sd in splits_data],
+            expense.amount,
+            self.payer_index(expense, users),
         )
 
         for sd, share_amount in zip(splits_data, shares):

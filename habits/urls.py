@@ -64,6 +64,12 @@ urlpatterns = [
         {"document_root": settings.BASE_DIR / "static", "path": "data-deletion.html"},
         name="data-deletion",
     ),
+    path(
+        "support",
+        serve,
+        {"document_root": settings.BASE_DIR / "static", "path": "support.html"},
+        name="support",
+    ),
     path("join", join_page),
     path("verify-email", verify_email_page, name="verify-email"),
     path("reset-password", reset_password_page, name="reset-password"),

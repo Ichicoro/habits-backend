@@ -29,7 +29,10 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = bool(os.environ.get("DEBUG", default=0))
+# Parsed as a string, not with bool(): every non-empty value is truthy, so
+# bool() turned "0"/"False" into DEBUG=True and shipped the debug pages -
+# and a "development" Sentry environment - to production.
+DEBUG = os.environ.get("DEBUG", "0").strip().lower() in ("1", "true", "yes", "on")
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
 

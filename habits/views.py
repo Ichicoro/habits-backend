@@ -67,8 +67,13 @@ def apple_app_site_association(request):
     )
 
 
-# Android App Links equivalent of the above. sha256_cert_fingerprints must
-# match the signing certificate used for the Play Store build.
+# Android App Links equivalent of the above. Every fingerprint that can sign a
+# build users actually install has to be listed, or App Links silently fail to
+# verify on that build and /join opens the browser instead of the app:
+#   - the local keystore, which signs the sideloaded echoes-beta.apk linked
+#     from the landing page;
+#   - the Play App Signing certificate, which is what Play re-signs the
+#     uploaded bundle with, so store installs carry that one instead.
 def android_asset_links(request):
     return JsonResponse(
         [
@@ -78,7 +83,10 @@ def android_asset_links(request):
                     "namespace": "android_app",
                     "package_name": "sh.zelda.echoes",
                     "sha256_cert_fingerprints": [
-                        "20:01:70:51:B2:D1:DF:4D:8D:35:70:BB:32:C1:89:6B:DB:E3:25:87:99:7C:28:36:84:77:0B:2F:57:33:DD:43"
+                        # Local keystore (sideloaded APK).
+                        "20:01:70:51:B2:D1:DF:4D:8D:35:70:BB:32:C1:89:6B:DB:E3:25:87:99:7C:28:36:84:77:0B:2F:57:33:DD:43",
+                        # Play App Signing key (Play Store installs).
+                        "05:D4:96:90:0E:F6:14:94:6E:06:A8:53:4B:C1:BA:7C:3A:BA:28:AC:BD:A6:30:26:A1:DC:92:F4:3F:96:F6:97",
                     ],
                 },
             }

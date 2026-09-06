@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
+    "corsheaders",
     "rest_framework",
     "rest_framework.authtoken",
     "habits.apps.HabitsConfig",
@@ -83,6 +84,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    # Ahead of CommonMiddleware so preflights get their headers before
+    # anything can redirect or 404 them.
+    "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -254,8 +258,15 @@ REST_FRAMEWORK = {
     },
 }
 
-# Only the Expo app talks to this API - no browser clients, so CORS is
-# intentionally not configured. Re-add django-cors-headers if that changes.
+# The web build of the Expo app is a browser client, so the origins it is
+# served from need CORS. Empty by default: the native apps send no Origin and
+# need nothing here, and a deployment that serves the web build from this
+# same host is same-origin anyway. Credentials stay off - auth is the token
+# in the Authorization header, never a cookie.
+CORS_ALLOWED_ORIGINS = [
+    origin for origin in os.environ.get("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",") if origin
+]
+CORS_ALLOW_CREDENTIALS = False
 
 # Security headers. These assume TLS is terminated at a reverse proxy/load
 # balancer in front of gunicorn that forwards the original scheme via the

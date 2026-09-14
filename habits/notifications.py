@@ -45,7 +45,7 @@ def notify_expense_added(expense: models.Expense):
             "title": board.name,
             "body": (
                 f"{added_by.name} added an expense: "
-                f"{expense.description or "Expense"} (E {expense.amount}) paid by {expense.payer.name}"
+                f"{expense.description or "Expense"} (£{expense.amount}) paid by {expense.payer.name}"
             ),
             "data": {"boardId": str(board.id), "expenseId": str(expense.id)},
         }

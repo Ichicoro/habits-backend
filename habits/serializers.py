@@ -34,6 +34,14 @@ class UserSerializer(serializers.ModelSerializer):
     def get_profile_picture(self, obj):
         return obj.profile_picture.url if obj.profile_picture else None
 
+
+class CurrentUserSerializer(UserSerializer):
+    # Only for the signed-in user's own record: other users (board members,
+    # payers) are serialized with UserSerializer so staff status isn't exposed.
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + ("is_staff",)
+        read_only_fields = ("is_staff",)
+
     def validate_username(self, value):
         qs = models.User.objects.filter(username__iexact=value)
         if self.instance is not None:

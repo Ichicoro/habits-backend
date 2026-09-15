@@ -155,6 +155,22 @@ class APITests(APITestCase):
         boards = response.json()["results"]
         self.assertEqual(len(boards), 0)
 
+    def test_me_includes_is_staff(self):
+        url = reverse("user-get-me")
+        self.assertFalse(self.client.get(url).json()["is_staff"])
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.assertTrue(self.client.get(url).json()["is_staff"])
+
+    def test_is_staff_is_read_only(self):
+        url = reverse("user-detail", args=[self.user.pk])
+        self.client.patch(url, {"is_staff": True}, format="json")
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_staff)
+
+    def test_is_staff_not_exposed_on_other_users(self):
+        self.assertNotIn("is_staff", UserSerializer(self.create_random_user()).data)
+
     def test_check_username_available(self):
         url = reverse("user-check-username")
         response = self.client.get(url, {"username": "someone-new"})

@@ -201,7 +201,7 @@ class RegisterView(CreateAPIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    serializer_class = serializers.UserSerializer
+    serializer_class = serializers.CurrentUserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):

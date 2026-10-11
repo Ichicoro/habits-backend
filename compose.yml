@@ -57,11 +57,17 @@ services:
      # in-memory backend, which only works in a single process.
      REDIS_URL: redis://redis:6379/0
      REALTIME_ENABLED: ${REALTIME_ENABLED:-1}
+   # User uploads (profile pictures) live in MEDIA_ROOT. Without a volume they
+   # sit in the container's writable layer and vanish on every redeploy, while
+   # the DB rows still point at them - so they 404.
+   volumes:
+     - media_data:/app/media
    env_file:
      - .env
 
 volumes:
    postgres_data:
+   media_data:
   
 networks:
   habits:

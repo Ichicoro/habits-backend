@@ -39,6 +39,10 @@ COPY --chown=appuser:appuser . .
 
 RUN chmod +x upkeep.sh
 RUN chmod +x start.sh
+
+# Mount point for the media volume. It has to exist (owned by appuser) in the
+# image, or Docker creates it root-owned and uploads fail with EACCES.
+RUN mkdir -p /app/media && chown appuser:appuser /app/media
  
 # Set environment variables to optimize Python
 ENV PYTHONDONTWRITEBYTECODE=1

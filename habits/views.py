@@ -290,8 +290,12 @@ class UserViewSet(viewsets.ModelViewSet):
         image = request.FILES.get("profile_picture")
         if not image:
             return Response({"profile_picture": "This field is required."}, status=400)
+        # Re-encoding and removal of the old file happen in habits.signals.
         request.user.profile_picture = image
-        request.user.save(update_fields=["profile_picture"])
+        try:
+            request.user.save(update_fields=["profile_picture"])
+        except DjangoValidationError as e:
+            return Response({"profile_picture": e.messages[0]}, status=400)
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
 

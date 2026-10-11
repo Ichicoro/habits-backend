@@ -1,9 +1,13 @@
+import io
+import tempfile
 from decimal import Decimal
 from unittest import mock
 
 from asgiref.sync import sync_to_async
 from channels.testing import WebsocketCommunicator
-from django.test import TestCase, TransactionTestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, TransactionTestCase, override_settings
+from PIL import Image
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 
@@ -1234,3 +1238,112 @@ class RealtimeFailOpenTests(TransactionTestCase):
             with self.settings(REALTIME_ENABLED=False):
                 Expense.objects.create(board=self.board, payer=self.user, amount=Decimal("3.00"))
         send.assert_not_called()
+
+
+class ProfilePictureTests(APITestCase):
+    def setUp(self):
+        media_root = tempfile.TemporaryDirectory()
+        self.addCleanup(media_root.cleanup)
+        media_settings = override_settings(MEDIA_ROOT=media_root.name)
+        media_settings.enable()
+        self.addCleanup(media_settings.disable)
+
+        self.url = reverse("user-set-profile-picture")
+        self.user = User.objects.create_user(username="pic", email="pic@example.com", password="pw123456789")
+        self.client.force_authenticate(user=self.user)
+
+    def make_image(self, name="photo.jpg", size=(2000, 1000), fmt="JPEG", exif=None):
+        buf = io.BytesIO()
+        Image.new("RGB", size, "red").save(buf, fmt, **({"exif": exif} if exif else {}))
+        return SimpleUploadedFile(name, buf.getvalue())
+
+    def gps_exif(self):
+        exif = Image.Exif()
+        exif[0x0110] = "Test Camera"
+        exif.get_ifd(0x8825)[2] = (51.0, 30.0, 0.0)  # GPSLatitude
+        exif[0x0112] = 6  # Orientation: rotate 90 CW to display
+        return exif
+
+    def upload(self, file):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(self.url, {"profile_picture": file}, format="multipart")
+
+    def stored(self):
+        self.user.refresh_from_db()
+        return self.user.profile_picture
+
+    def test_upload_is_resized_stripped_and_renamed(self):
+        response = self.upload(self.make_image(exif=self.gps_exif()))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        picture = self.stored()
+        self.assertRegex(picture.name, r"^profile_pictures/[0-9a-f]{32}\.jpg$")
+        with Image.open(picture.path) as im:
+            self.assertEqual(im.format, "JPEG")
+            # 2000x1000 rotated by its EXIF orientation, then fit into 512.
+            self.assertEqual(im.size, (256, 512))
+            self.assertEqual(len(im.getexif()), 0)
+
+    def test_transparent_png_is_accepted(self):
+        buf = io.BytesIO()
+        Image.new("RGBA", (10, 10), (0, 0, 0, 0)).save(buf, "PNG")
+        response = self.upload(SimpleUploadedFile("a.png", buf.getvalue()))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_non_image_is_rejected(self):
+        response = self.upload(SimpleUploadedFile("x.html", b"<script>alert(1)</script>"))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(self.stored())
+
+    def test_replacing_deletes_old_file(self):
+        self.upload(self.make_image())
+        old = self.stored()
+        self.assertTrue(old.storage.exists(old.name))
+
+        self.upload(self.make_image())
+        self.assertFalse(old.storage.exists(old.name))
+        self.assertTrue(old.storage.exists(self.stored().name))
+
+    def test_failed_replacement_keeps_old_file(self):
+        self.upload(self.make_image())
+        old = self.stored()
+        self.upload(SimpleUploadedFile("x.txt", b"nope"))
+        self.assertEqual(self.stored().name, old.name)
+        self.assertTrue(old.storage.exists(old.name))
+
+    def test_deleting_account_deletes_file(self):
+        self.upload(self.make_image())
+        picture = self.stored()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.delete(reverse("user-detail", args=[self.user.pk]))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(picture.storage.exists(picture.name))
+
+    def test_clean_command(self):
+        from django.core.files.storage import default_storage
+        from django.core.management import call_command
+
+        legacy = default_storage.save("profile_pictures/legacy.jpg", self.make_image(exif=self.gps_exif()))
+        bogus = default_storage.save("profile_pictures/evil.html", io.BytesIO(b"<script></script>"))
+        orphan = default_storage.save("profile_pictures/orphan.jpg", self.make_image())
+        User.objects.filter(pk=self.user.pk).update(profile_picture=legacy)
+        bogus_user = User.objects.create_user(username="b", email="b@example.com", password="pw123456789")
+        User.objects.filter(pk=bogus_user.pk).update(profile_picture=bogus)
+        gone_user = User.objects.create_user(username="g", email="g@example.com", password="pw123456789")
+        User.objects.filter(pk=gone_user.pk).update(profile_picture="profile_pictures/gone.jpg")
+
+        call_command("clean_profile_pictures", "--dry-run", stdout=io.StringIO())
+        self.assertTrue(default_storage.exists(orphan))
+        self.assertEqual(self.stored().name, legacy)
+
+        call_command("clean_profile_pictures", stdout=io.StringIO())
+        self.assertRegex(self.stored().name, r"^profile_pictures/[0-9a-f]{32}\.jpg$")
+        with Image.open(self.stored().path) as im:
+            self.assertEqual(len(im.getexif()), 0)
+        for name in (legacy, bogus, orphan):
+            self.assertFalse(default_storage.exists(name), name)
+        bogus_user.refresh_from_db()
+        gone_user.refresh_from_db()
+        self.assertFalse(bogus_user.profile_picture)
+        self.assertFalse(gone_user.profile_picture)
+        self.assertEqual(default_storage.listdir("profile_pictures")[1], [self.stored().name.split("/")[1]])
